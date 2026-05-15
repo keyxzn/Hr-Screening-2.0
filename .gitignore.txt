@@ -1,0 +1,26 @@
+# dependencies
+node_modules
+
+# python
+venv/
+backend/venv/
+venvvenv/
+__pycache__/
+
+# next
+.next/
+out/
+
+# env
+.env
+.env.local
+
+# zip
+*.zip
+
+# logs
+*.log
+
+# build
+dist/
+build/
