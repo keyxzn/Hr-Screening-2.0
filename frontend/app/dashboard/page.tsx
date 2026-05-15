@@ -12,6 +12,63 @@ import {
 
 type Row = Candidate & { report?: ScreeningReport };
 
+const DUMMY_ROWS: Row[] = [
+  {
+    id: 1,
+    full_name: "Budi Santoso",
+    email: "budi@gmail.com",
+    created_at: "2026-05-10T10:00:00",
+    report: {
+      status: "completed",
+      overall_risk: "low",
+      risk_scores: {
+        professional_risk: 12,
+        toxic_language: 5,
+        hate_speech: 2,
+        explicit_content: 4,
+        violence: 3,
+        extremism: 1,
+      }
+    }
+  },
+  {
+    id: 2,
+    full_name: "Karina Putri",
+    email: "karina@gmail.com",
+    created_at: "2026-05-12T10:00:00",
+    report: {
+      status: "completed",
+      overall_risk: "high",
+      risk_scores: {
+        professional_risk: 75,
+        toxic_language: 62,
+        hate_speech: 40,
+        explicit_content: 15,
+        violence: 33,
+        extremism: 20,
+      }
+    }
+  },
+  {
+    id: 3,
+    full_name: "Raka Wijaya",
+    email: "raka@gmail.com",
+    created_at: "2026-05-14T10:00:00",
+    report: {
+      status: "processing",
+      overall_risk: "medium",
+      risk_scores: {
+        professional_risk: 40,
+        toxic_language: 30,
+        hate_speech: 15,
+        explicit_content: 10,
+        violence: 20,
+        extremism: 5,
+      }
+    }
+  }
+];
+
 const RISK_CATS = [
   { label:"Fraud / Scam",    key:"professional_risk", color:"#ef4444", track:"rgba(239,68,68,0.12)" },
   { label:"Toxic Language",  key:"toxic_language",    color:"#f97316", track:"rgba(249,115,22,0.12)" },
@@ -76,7 +133,7 @@ export default function DashboardPage() {
       try {
         const c = await api.listCandidates();
         const w = await Promise.all(c.map(async x=>{ try { return {...x,report:await api.getReport(x.id)} } catch { return x } }));
-        setRows(w);
+        setRows(w.length ? w : DUMMY_ROWS);
       } finally { setLoading(false); }
     })();
   },[]);
@@ -93,18 +150,28 @@ export default function DashboardPage() {
   const highPct = total>0 ? Math.round(((risk.high+risk.critical)/total)*100) : 0;
   const recent  = [...rows].sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime()).slice(0,5);
 
+  const highRiskCandidates = rows.filter(
+    r =>
+      r.report?.overall_risk === "high" ||
+      r.report?.overall_risk === "critical"
+  );
+
+  const goodCandidates = rows.filter(
+    r => r.report?.overall_risk === "low"
+  );
+
   const CARDS = [
     { label:"Total Kandidat", val:total,                     sub:`${processing} diproses`,  icon:Users,      style:{ background:"var(--bg2)", border:"1px solid var(--border)" }, iStyle:{ background:"var(--bg3)", color:"var(--text3)" }, vColor:"var(--text)" },
-    { label:"Selesai",        val:completed,                 sub:"screening selesai",        icon:UserCheck,  style:{ background:"linear-gradient(135deg,#00c896 0%,#009e76 100%)", border:"none", boxShadow:"0 10px 32px rgba(0,200,150,0.35)" }, iStyle:{ background:"rgba(255,255,255,0.2)", color:"#fff" }, vColor:"#fff" },
-    { label:"High / Kritis",  val:risk.high+risk.critical,   sub:`${highPct}% dari total`,  icon:ShieldAlert, style:{ background:"linear-gradient(135deg,#ef4444 0%,#b91c1c 100%)", border:"none", boxShadow:"0 10px 32px rgba(239,68,68,0.35)" }, iStyle:{ background:"rgba(255,255,255,0.2)", color:"#fff" }, vColor:"#fff" },
-    { label:"Low Risk",       val:risk.low,                  sub:"aman dilanjutkan",         icon:TrendingUp,  style:{ background:"linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%)", border:"none", boxShadow:"0 10px 32px rgba(59,130,246,0.35)" }, iStyle:{ background:"rgba(255,255,255,0.2)", color:"#fff" }, vColor:"#fff" },
+    { label:"Selesai",        val:completed,                 sub:"screening selesai",        icon:UserCheck,  style:{ background:"linear-gradient(135deg,#00c896 0%,#009e76 100%)", border:"none", boxShadow:"0 4px 18px rgba(0,0,0,0.08)" }, iStyle:{ background:"rgba(255,255,255,0.2)", color:"#fff" }, vColor:"#fff" },
+    { label:"High / Kritis",  val:risk.high+risk.critical,   sub:`${highPct}% dari total`,  icon:ShieldAlert, style:{ background:"linear-gradient(135deg,#ef4444 0%,#b91c1c 100%)", border:"none", boxShadow:"0 4px 18px rgba(0,0,0,0.08)" }, iStyle:{ background:"rgba(255,255,255,0.2)", color:"#fff" }, vColor:"#fff" },
+    { label:"Low Risk",       val:risk.low,                  sub:"aman dilanjutkan",         icon:TrendingUp,  style:{ background:"linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%)", border:"none", boxShadow:"0 4px 18px rgba(0,0,0,0.08)" }, iStyle:{ background:"rgba(255,255,255,0.2)", color:"#fff" }, vColor:"#fff" },
   ];
 
   const fmt = (d:string) => new Date(d).toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"});
 
   return (
     <AppLayout>
-      <div style={{ padding:"36px 32px", maxWidth:1120, margin:"0 auto" }}>
+      <div style={{ padding:"36px 32px", maxWidth:1280, margin:"0 auto" }}>
 
         {/* Page Header */}
         <div className="fade-up" style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:36, flexWrap:"wrap", gap:16 }}>
@@ -128,7 +195,7 @@ export default function DashboardPage() {
         <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:16, marginBottom:28 }} className="lg:grid-cols-4">
           {CARDS.map((c,i)=>(
             <div key={c.label} className={`fade-up d${i+1}`} style={{
-              ...c.style as any, borderRadius:20, padding:"24px 22px",
+              ...c.style as any, borderRadius:20, padding:"20px",
               position:"relative", overflow:"hidden",
             }}>
               {i > 0 && <>
@@ -139,7 +206,7 @@ export default function DashboardPage() {
                 <div style={{ width:36, height:36, borderRadius:11, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:16, ...c.iStyle as any }}>
                   <c.icon size={15} />
                 </div>
-                <p className="count-up" style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:38, color:c.vColor, lineHeight:1 }}>{c.val}</p>
+                <p className="count-up" style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:30, color:c.vColor, lineHeight:1 }}>{c.val}</p>
                 <p style={{ fontSize:13, fontWeight:600, color:i===0?"var(--text)":"rgba(255,255,255,0.9)", marginTop:7 }}>{c.label}</p>
                 <p style={{ fontSize:11, color:i===0?"var(--text3)":"rgba(255,255,255,0.45)", marginTop:2 }}>{c.sub}</p>
               </div>
@@ -241,6 +308,206 @@ export default function DashboardPage() {
             </Link>
           </div>
         )}
+
+        {/* Candidate Insights */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 20,
+            marginBottom: 24,
+          }}
+        >
+          {/* High Risk */}
+          <div className="card fade-up d2" style={{ padding: "24px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 20,
+              }}
+            >
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  background: "rgba(239,68,68,0.12)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <AlertTriangle size={16} style={{ color: "#ef4444" }} />
+              </div>
+
+              <div>
+                <h3
+                  style={{
+                    fontFamily: "'Syne',sans-serif",
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: "var(--text)",
+                  }}
+                >
+                  Kandidat Risiko Tinggi
+                </h3>
+
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text3)",
+                    marginTop: 2,
+                  }}
+                >
+                  Kandidat yang perlu perhatian HR
+                </p>
+              </div>
+            </div>
+
+            {highRiskCandidates.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--text3)" }}>
+                Tidak ada kandidat bermasalah
+              </p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {highRiskCandidates.map((row) => (
+                  <div
+                    key={row.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 14px",
+                      borderRadius: 14,
+                      background: "var(--bg3)",
+                    }}
+                  >
+                    <div>
+                      <p
+                        style={{
+                          fontSize: 13.5,
+                          fontWeight: 600,
+                          color: "var(--text)",
+                        }}
+                      >
+                        {row.full_name}
+                      </p>
+
+                      <p
+                        style={{
+                          fontSize: 11.5,
+                          color: "var(--text3)",
+                          marginTop: 2,
+                        }}
+                      >
+                        {row.email}
+                      </p>
+                    </div>
+
+                    <RiskBadge level={row.report?.overall_risk as any} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Good Candidates */}
+          <div className="card fade-up d3" style={{ padding: "24px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 20,
+              }}
+            >
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  background: "rgba(16,185,129,0.12)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <CheckCircle size={16} style={{ color: "#10b981" }} />
+              </div>
+
+              <div>
+                <h3
+                  style={{
+                    fontFamily: "'Syne',sans-serif",
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: "var(--text)",
+                  }}
+                >
+                  Kandidat Direkomendasikan
+                </h3>
+
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text3)",
+                    marginTop: 2,
+                  }}
+                >
+                  Kandidat dengan risiko rendah
+                </p>
+              </div>
+            </div>
+
+            {goodCandidates.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--text3)" }}>
+                Belum ada kandidat low risk
+              </p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {goodCandidates.map((row) => (
+                  <div
+                    key={row.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 14px",
+                      borderRadius: 14,
+                      background: "var(--bg3)",
+                    }}
+                  >
+                    <div>
+                      <p
+                        style={{
+                          fontSize: 13.5,
+                          fontWeight: 600,
+                          color: "var(--text)",
+                        }}
+                      >
+                        {row.full_name}
+                      </p>
+
+                      <p
+                        style={{
+                          fontSize: 11.5,
+                          color: "var(--text3)",
+                          marginTop: 2,
+                        }}
+                      >
+                        {row.email}
+                      </p>
+                    </div>
+
+                    <RiskBadge level="low" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Recent Table */}
         <div className="card fade-up d3" style={{ overflow:"hidden" }}>
