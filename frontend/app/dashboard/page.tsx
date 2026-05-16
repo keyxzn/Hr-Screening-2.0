@@ -156,6 +156,10 @@ export default function DashboardPage() {
       r.report?.overall_risk === "critical"
   );
 
+  const mediumRiskCandidates = rows.filter(
+    r => r.report?.overall_risk === "medium"
+  );
+
   const goodCandidates = rows.filter(
     r => r.report?.overall_risk === "low"
   );
@@ -313,99 +317,32 @@ export default function DashboardPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "1fr 1fr 1fr",
             gap: 20,
             marginBottom: 24,
           }}
         >
           {/* High Risk */}
           <div className="card fade-up d2" style={{ padding: "24px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: 20,
-              }}
-            >
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  background: "rgba(239,68,68,0.12)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(239,68,68,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <AlertTriangle size={16} style={{ color: "#ef4444" }} />
               </div>
-
               <div>
-                <h3
-                  style={{
-                    fontFamily: "'Syne',sans-serif",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: "var(--text)",
-                  }}
-                >
-                  Kandidat Risiko Tinggi
-                </h3>
-
-                <p
-                  style={{
-                    fontSize: 12,
-                    color: "var(--text3)",
-                    marginTop: 2,
-                  }}
-                >
-                  Kandidat yang perlu perhatian HR
-                </p>
+                <h3 style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Kandidat Risiko Tinggi</h3>
+                <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>Kandidat yang perlu perhatian HR</p>
               </div>
             </div>
-
             {highRiskCandidates.length === 0 ? (
-              <p style={{ fontSize: 13, color: "var(--text3)" }}>
-                Tidak ada kandidat bermasalah
-              </p>
+              <p style={{ fontSize: 13, color: "var(--text3)" }}>Tidak ada kandidat bermasalah</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {highRiskCandidates.map((row) => (
-                  <div
-                    key={row.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "12px 14px",
-                      borderRadius: 14,
-                      background: "var(--bg3)",
-                    }}
-                  >
+                  <div key={row.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 14, background: "var(--bg3)" }}>
                     <div>
-                      <p
-                        style={{
-                          fontSize: 13.5,
-                          fontWeight: 600,
-                          color: "var(--text)",
-                        }}
-                      >
-                        {row.full_name}
-                      </p>
-
-                      <p
-                        style={{
-                          fontSize: 11.5,
-                          color: "var(--text3)",
-                          marginTop: 2,
-                        }}
-                      >
-                        {row.email}
-                      </p>
+                      <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{row.full_name}</p>
+                      <p style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 2 }}>{row.email}</p>
                     </div>
-
                     <RiskBadge level={row.report?.overall_risk as any} />
                   </div>
                 ))}
@@ -413,94 +350,65 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Good Candidates */}
-          <div className="card fade-up d3" style={{ padding: "24px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: 20,
-              }}
-            >
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  background: "rgba(16,185,129,0.12)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <CheckCircle size={16} style={{ color: "#10b981" }} />
+          {/* Medium Risk */}
+          <div className="card fade-up d3" style={{ padding: "24px", border: "1px solid rgba(245,158,11,0.25)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(245,158,11,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Zap size={16} style={{ color: "#f59e0b" }} />
               </div>
-
               <div>
-                <h3
-                  style={{
-                    fontFamily: "'Syne',sans-serif",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: "var(--text)",
-                  }}
-                >
-                  Kandidat Direkomendasikan
-                </h3>
-
-                <p
-                  style={{
-                    fontSize: 12,
-                    color: "var(--text3)",
-                    marginTop: 2,
-                  }}
-                >
-                  Kandidat dengan risiko rendah
-                </p>
+                <h3 style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Perlu Pertimbangan</h3>
+                <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>Diskusikan dengan pihak terkait</p>
               </div>
             </div>
 
+            {mediumRiskCandidates.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--text3)" }}>Tidak ada kandidat sedang</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {mediumRiskCandidates.map((row) => (
+                  <Link key={row.id} href={`/candidates/${row.id}`} style={{ textDecoration: "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 14, background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.18)", cursor: "pointer", transition: "background 0.15s" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "rgba(245,158,11,0.12)")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "rgba(245,158,11,0.06)")}>
+                      <div>
+                        <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{row.full_name}</p>
+                        <p style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 2 }}>{row.email}</p>
+                      </div>
+                      <RiskBadge level="medium" />
+                    </div>
+                  </Link>
+                ))}
+                <div style={{ marginTop: 8, padding: "10px 14px", borderRadius: 12, background: "rgba(245,158,11,0.08)", border: "1px dashed rgba(245,158,11,0.3)" }}>
+                  <p style={{ fontSize: 11.5, color: "#d97706", fontWeight: 600, lineHeight: 1.5 }}>
+                    ⚠ Kandidat ini memerlukan diskusi lebih lanjut dengan pihak terkait sebelum melanjutkan proses interview.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Good Candidates */}
+          <div className="card fade-up d4" style={{ padding: "24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(16,185,129,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <CheckCircle size={16} style={{ color: "#10b981" }} />
+              </div>
+              <div>
+                <h3 style={{ fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Kandidat Direkomendasikan</h3>
+                <p style={{ fontSize: 12, color: "var(--text3)", marginTop: 2 }}>Kandidat dengan risiko rendah</p>
+              </div>
+            </div>
             {goodCandidates.length === 0 ? (
-              <p style={{ fontSize: 13, color: "var(--text3)" }}>
-                Belum ada kandidat low risk
-              </p>
+              <p style={{ fontSize: 13, color: "var(--text3)" }}>Belum ada kandidat low risk</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {goodCandidates.map((row) => (
-                  <div
-                    key={row.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "12px 14px",
-                      borderRadius: 14,
-                      background: "var(--bg3)",
-                    }}
-                  >
+                  <div key={row.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 14, background: "var(--bg3)" }}>
                     <div>
-                      <p
-                        style={{
-                          fontSize: 13.5,
-                          fontWeight: 600,
-                          color: "var(--text)",
-                        }}
-                      >
-                        {row.full_name}
-                      </p>
-
-                      <p
-                        style={{
-                          fontSize: 11.5,
-                          color: "var(--text3)",
-                          marginTop: 2,
-                        }}
-                      >
-                        {row.email}
-                      </p>
+                      <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{row.full_name}</p>
+                      <p style={{ fontSize: 11.5, color: "var(--text3)", marginTop: 2 }}>{row.email}</p>
                     </div>
-
                     <RiskBadge level="low" />
                   </div>
                 ))}

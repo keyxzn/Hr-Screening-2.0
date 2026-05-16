@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.replace("/login");
     }
     if (user && pathname === "/login") {
-      router.replace("/screening");
+      router.replace("/dashboard"); // ← fix: ke dashboard bukan screening
     }
   }, [user, loading, pathname]);
 
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     localStorage.setItem("hr_user", JSON.stringify(authUser));
     setUser(authUser);
-    router.replace("/screening");
+    router.replace("/dashboard"); // ← fix: ke dashboard bukan screening
   }
 
   function logout() {

@@ -1,179 +1,136 @@
 "use client";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { Shield, Mail, Lock, Loader2, AlertCircle, Eye, EyeOff, Zap } from "lucide-react";
+import { Shield, Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [showPw, setShowPw]     = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
+  const [email, setEmail] = useState("");
+  const [pw, setPw]       = useState("");
+  const [show, setShow]   = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function submit() {
-    if (!email || !password) { setError("Email dan password wajib diisi."); return; }
+    if (!email || !pw) { setError("Email dan password wajib diisi."); return; }
     setError(""); setLoading(true);
-    try { await login(email, password); }
+    try { await login(email, pw); }
     catch (e: any) { setError(e.message ?? "Login gagal."); }
     finally { setLoading(false); }
   }
 
-  const inputStyle = {
-    background: "#0f1422",
-    border: "1.5px solid #1e2a3d",
-    color: "white",
-    borderRadius: 12,
-    padding: "12px 14px 12px 40px",
-    fontSize: 13,
-    outline: "none",
-    width: "100%",
-    transition: "border-color 0.15s, box-shadow 0.15s",
-    fontFamily: "DM Sans, sans-serif",
-  };
-
   return (
-    <div style={{ minHeight: "100vh", background: "#080b14", display: "flex", alignItems: "stretch" }}>
+    <div style={{ minHeight: "100vh", display: "flex", background: "#080d14", fontFamily: "'Inter',sans-serif" }}>
 
       {/* ── LEFT PANEL ── */}
-      <div className="hidden lg:flex flex-col justify-between w-[46%] p-12 relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg,#071a12 0%,#0a1020 50%,#080b14 100%)" }}>
+      <div className="hidden lg:flex flex-col justify-between" style={{ width: 480, flexShrink: 0, padding: "40px 48px", position: "relative", overflow: "hidden", background: "linear-gradient(160deg,#071a11 0%,#090f1e 60%,#080d14 100%)" }}>
 
-        {/* Grid bg */}
-        <div className="absolute inset-0"
-          style={{
-            backgroundImage: "linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px)",
-            backgroundSize: "48px 48px",
-          }} />
-
-        {/* Glows */}
-        <div className="absolute top-1/3 -left-16 w-80 h-80 rounded-full opacity-25 blur-3xl" style={{ background: "#00c896" }} />
-        <div className="absolute bottom-1/4 right-0 w-56 h-56 rounded-full opacity-10 blur-3xl" style={{ background: "#3b82f6" }} />
+        {/* Grid pattern */}
+        <div style={{ position: "absolute", inset: 0, opacity: 0.06, backgroundImage: "linear-gradient(#10b981 1px,transparent 1px),linear-gradient(90deg,#10b981 1px,transparent 1px)", backgroundSize: "56px 56px", pointerEvents: "none" }} />
+        {/* Glow blobs */}
+        <div style={{ position: "absolute", top: "20%", left: "-80px", width: 320, height: 320, borderRadius: "50%", background: "#10b981", opacity: 0.08, filter: "blur(80px)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", bottom: "15%", right: "-60px", width: 200, height: 200, borderRadius: "50%", background: "#3b82f6", opacity: 0.06, filter: "blur(60px)", pointerEvents: "none" }} />
 
         {/* Logo */}
-        <div className="relative flex items-center gap-3 z-10">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-xl"
-            style={{ background: "linear-gradient(135deg,#00c896,#00a07a)" }}>
-            <Shield size={18} className="text-white" />
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: "linear-gradient(135deg,#10b981,#059669)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(16,185,129,.35)" }}>
+            <Shield size={18} color="#fff" />
           </div>
           <div>
-            <p className="font-display font-extrabold text-white text-lg tracking-tight leading-none">
-              HR<span style={{ color: "#00c896" }}>Check</span>
+            <p style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 20, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1 }}>
+              HR<span style={{ color: "#10b981" }}>Check</span>
             </p>
-            <p className="text-[9px] tracking-[0.2em] uppercase mt-0.5" style={{ color: "#4b6a58" }}>Screening AI</p>
+            <p style={{ fontSize: 9, letterSpacing: "0.18em", textTransform: "uppercase", color: "#1a3a28", fontWeight: 600, marginTop: 3 }}>AI Recruitment</p>
           </div>
         </div>
 
-        {/* Main content */}
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold tracking-widest uppercase mb-6"
-            style={{ background: "rgba(0,200,150,0.1)", color: "#00c896", border: "1px solid rgba(0,200,150,0.2)" }}>
-            <Zap size={9} /> AI-Powered Platform
+        {/* Hero */}
+        <div style={{ position: "relative" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 99, background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.2)", color: "#10b981", fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 20 }}>
+            ⚡ AI-Powered Platform
           </div>
-          <h2 className="font-display text-[38px] font-extrabold text-white leading-tight tracking-tight mb-4">
-            Screening Kandidat<br /><span style={{ color: "#00c896" }}>Lebih Cerdas</span>
+          <h2 style={{ fontFamily: "'Syne',sans-serif", fontSize: 38, fontWeight: 800, color: "#e2e8f0", lineHeight: 1.15, letterSpacing: "-0.03em", marginBottom: 16 }}>
+            Background<br />Screening yang<br /><span style={{ color: "#10b981" }}>Lebih Cerdas</span>
           </h2>
-          <p className="text-[14px] leading-relaxed mb-8 max-w-sm" style={{ color: "#64748b" }}>
-            Platform HR screening berbasis AI yang menganalisis data publik kandidat dari berbagai platform sosial media secara legal dan profesional.
+          <p style={{ fontSize: 14, lineHeight: 1.7, color: "#334155", marginBottom: 28, maxWidth: 360 }}>
+            Analisis data publik kandidat dari 6+ platform sosial media secara legal, profesional, dan otomatis berbasis AI.
           </p>
-
-          {/* Feature list */}
-          <div className="space-y-3.5">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              { icon: "🛡️", label: "Legal & Sesuai UU PDP Indonesia" },
-              { icon: "🤖", label: "AI analisis dengan Ollama + Llama 3" },
-              { icon: "📊", label: "Report risiko per kategori otomatis" },
-              { icon: "⚡", label: "Bulk screening ratusan kandidat sekaligus" },
+              { icon: "🛡️", text: "Legal & Sesuai UU PDP Indonesia" },
+              { icon: "🤖", text: "AI analisis Ollama + Llama 3" },
+              { icon: "📊", text: "Risk report otomatis per kategori" },
+              { icon: "⚡", text: "Bulk screening ratusan kandidat" },
             ].map(f => (
-              <div key={f.label} className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: "rgba(0,200,150,0.08)", border: "1px solid rgba(0,200,150,0.15)" }}>
-                  <span className="text-sm">{f.icon}</span>
-                </div>
-                <span className="text-[13px]" style={{ color: "#94a3b8" }}>{f.label}</span>
+              <div key={f.text} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 16, width: 24, flexShrink: 0 }}>{f.icon}</span>
+                <span style={{ fontSize: 13, color: "#334155" }}>{f.text}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="relative z-10">
-          <p className="text-[11px]" style={{ color: "#1e2a3d" }}>© 2026 HRCheck · Confidential</p>
-        </div>
+        <p style={{ position: "relative", fontSize: 11, color: "#0f1f18" }}>© 2026 HRCheck · Confidential</p>
       </div>
 
       {/* ── RIGHT PANEL ── */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12" style={{ background: "#080b14" }}>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
+        <div style={{ width: "100%", maxWidth: 380 }}>
 
-        {/* Mobile logo */}
-        <div className="lg:hidden flex items-center gap-3 mb-10">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg,#00c896,#00a07a)" }}>
-            <Shield size={16} className="text-white" />
-          </div>
-          <span className="font-display font-extrabold text-white text-lg">
-            HR<span style={{ color: "#00c896" }}>Check</span>
-          </span>
-        </div>
-
-        <div className="w-full max-w-[380px]">
-          <div className="mb-8">
-            <h1 className="font-display text-[28px] font-extrabold text-white tracking-tight mb-1.5">
-              Selamat Datang
-            </h1>
-            <p className="text-[13px]" style={{ color: "#64748b" }}>
-              Masuk ke dashboard HR Screening
-            </p>
+          {/* Mobile logo */}
+          <div className="lg:hidden" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 36 }}>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: "linear-gradient(135deg,#10b981,#059669)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Shield size={15} color="#fff" />
+            </div>
+            <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 18, color: "#fff" }}>
+              HR<span style={{ color: "#10b981" }}>Check</span>
+            </span>
           </div>
 
+          {/* Heading */}
+          <div style={{ marginBottom: 28 }}>
+            <h1 style={{ fontFamily: "'Syne',sans-serif", fontSize: 26, fontWeight: 800, color: "#e2e8f0", letterSpacing: "-0.03em", marginBottom: 4 }}>Selamat Datang</h1>
+            <p style={{ fontSize: 14, color: "#374151" }}>Masuk ke platform HR Screening</p>
+          </div>
+
+          {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 p-3.5 rounded-xl text-[12px] mb-5"
-              style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171" }}>
-              <AlertCircle size={13} className="flex-shrink-0" /> {error}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", borderRadius: 10, background: "rgba(239,68,68,.08)", border: "1px solid rgba(239,68,68,.2)", color: "#f87171", fontSize: 13, marginBottom: 20 }}>
+              <AlertCircle size={14} style={{ flexShrink: 0 }} /> {error}
             </div>
           )}
 
-          <div className="space-y-4">
+          {/* Form */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
             {/* Email */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider mb-2"
-                style={{ color: "#64748b" }}>
-                Email
-              </label>
-              <div className="relative">
-                <Mail size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: "#475569" }} />
-                <input type="email" value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && submit()}
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#1f2937", marginBottom: 8 }}>Email</label>
+              <div style={{ position: "relative" }}>
+                <Mail size={14} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#374151", pointerEvents: "none" }} />
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()}
                   placeholder="hr@perusahaan.com"
-                  style={inputStyle}
-                  onFocus={e => { e.target.style.borderColor = "#00c896"; e.target.style.boxShadow = "0 0 0 3px rgba(0,200,150,0.1)"; }}
-                  onBlur={e => { e.target.style.borderColor = "#1e2a3d"; e.target.style.boxShadow = "none"; }}
-                />
+                  style={{ width: "100%", boxSizing: "border-box", padding: "12px 14px 12px 42px", background: "#0f1520", border: "1.5px solid #1e2b3a", borderRadius: 10, color: "#e2e8f0", fontSize: 14, outline: "none", fontFamily: "'Inter',sans-serif", transition: "border-color .15s" }}
+                  onFocus={e => e.target.style.borderColor = "#10b981"}
+                  onBlur={e => e.target.style.borderColor = "#1e2b3a"} />
               </div>
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider mb-2"
-                style={{ color: "#64748b" }}>
-                Password
-              </label>
-              <div className="relative">
-                <Lock size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: "#475569" }} />
-                <input type={showPw ? "text" : "password"} value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && submit()}
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "#1f2937", marginBottom: 8 }}>Password</label>
+              <div style={{ position: "relative" }}>
+                <Lock size={14} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#374151", pointerEvents: "none" }} />
+                <input type={show ? "text" : "password"} value={pw} onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()}
                   placeholder="••••••••"
-                  style={{ ...inputStyle, paddingRight: 44 }}
-                  onFocus={e => { e.target.style.borderColor = "#00c896"; e.target.style.boxShadow = "0 0 0 3px rgba(0,200,150,0.1)"; }}
-                  onBlur={e => { e.target.style.borderColor = "#1e2a3d"; e.target.style.boxShadow = "none"; }}
-                />
-                <button onClick={() => setShowPw(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors p-1 rounded"
-                  style={{ color: "#475569" }}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "12px 44px 12px 42px", background: "#0f1520", border: "1.5px solid #1e2b3a", borderRadius: 10, color: "#e2e8f0", fontSize: 14, outline: "none", fontFamily: "'Inter',sans-serif", transition: "border-color .15s" }}
+                  onFocus={e => e.target.style.borderColor = "#10b981"}
+                  onBlur={e => e.target.style.borderColor = "#1e2b3a"} />
+                <button type="button" onClick={() => setShow(s => !s)}
+                  style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", color: "#374151", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", padding: 0, transition: "color .15s" }}
                   onMouseEnter={e => (e.currentTarget.style.color = "#94a3b8")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "#475569")}>
-                  {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                  onMouseLeave={e => (e.currentTarget.style.color = "#374151")}>
+                  {show ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
             </div>
@@ -181,30 +138,24 @@ export default function LoginPage() {
 
           {/* Submit */}
           <button onClick={submit} disabled={loading}
-            className="w-full mt-6 flex items-center justify-center gap-2 py-3.5 rounded-xl font-display font-bold text-[14px] text-white transition-all"
-            style={{
-              background: loading ? "#0f1a2e" : "linear-gradient(135deg,#00c896,#00a07a)",
-              cursor: loading ? "not-allowed" : "pointer",
-              boxShadow: loading ? "none" : "0 8px 24px rgba(0,200,150,0.3)",
-              border: "none",
-              opacity: loading ? 0.8 : 1,
-            }}>
-            {loading
-              ? <><Loader2 size={15} className="animate-spin" />Masuk...</>
-              : <><Shield size={14} />Masuk ke HRCheck</>
-            }
+            style={{ width: "100%", marginTop: 24, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 20px", background: loading ? "#0f1520" : "linear-gradient(135deg,#10b981,#059669)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, fontFamily: "'Syne',sans-serif", cursor: loading ? "not-allowed" : "pointer", letterSpacing: "-0.01em", boxShadow: loading ? "none" : "0 4px 20px rgba(16,185,129,.35)", transition: "all .2s" }}
+            onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 6px 28px rgba(16,185,129,.5)"; }}
+            onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 20px rgba(16,185,129,.35)"; }}>
+            {loading ? (
+              <>
+                <div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,.25)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                Masuk...
+              </>
+            ) : (
+              <><Shield size={14} /> Masuk ke HRCheck</>
+            )}
           </button>
 
-          <div className="flex items-center gap-3 mt-6 mb-4">
-            <div className="flex-1 h-px" style={{ background: "#0f1a2e" }} />
-            <span className="text-[10px] font-semibold" style={{ color: "#1e2a3d" }}>Akses Terbatas</span>
-            <div className="flex-1 h-px" style={{ background: "#0f1a2e" }} />
-          </div>
-
-          <p className="text-center text-[11px] leading-relaxed" style={{ color: "#334155" }}>
-            Hanya untuk HR & personel berwenang.<br />
-            Hubungi admin untuk mendapatkan akun.
+          <p style={{ textAlign: "center", fontSize: 12, color: "#111827", marginTop: 20 }}>
+            Akses hanya untuk HR & personel berwenang
           </p>
+
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
     </div>
