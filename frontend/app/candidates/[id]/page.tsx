@@ -1,344 +1,402 @@
 "use client";
 
-import React, {
-  useEffect,
-  useState,
-  useCallback,
-} from "react";
-
+import React, { useEffect, useState, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-
 import RiskBadge from "@/components/RiskBadge";
+import { api, Candidate, ScreeningReport } from "@/lib/api";
 import {
-  api,
-  Candidate,
-  ScreeningReport,
-} from "@/lib/api";
-
-import {
-  ArrowLeft,
-  Loader2,
-  RefreshCw,
-  Instagram,
-  Twitter,
-  Globe,
-  Linkedin,
-  Newspaper,
-  AlertTriangle,
-  CheckCircle,
-  ShieldAlert,
-  Mail,
-  Phone,
+  ArrowLeft, Loader2, RefreshCw, Camera, MessageCircle,
+  Globe, Link2, Newspaper, AlertTriangle, CheckCircle,
+  ShieldAlert, Mail, Phone, Clock,
 } from "lucide-react";
 
-const RISK_LABELS: Record<
-  string,
-  {
-    label: string;
-    icon: string;
-    desc: string;
-  }
-> = {
-  explicit_content: {
-    label: "Explicit Content",
-    icon: "🔞",
-    desc: "Pornografi / konten vulgar",
-  },
-
-  toxic_language: {
-    label: "Toxic Language",
-    icon: "🤬",
-    desc: "Kata kasar, bullying, harassment",
-  },
-
-  hate_speech: {
-    label: "Hate Speech",
-    icon: "🚫",
-    desc: "Serangan ras, agama, gender",
-  },
-
-  violence: {
-    label: "Violence",
-    icon: "💢",
-    desc: "Ancaman kekerasan",
-  },
-
-  extremism: {
-    label: "Extremism",
-    icon: "☢️",
-    desc: "Terorisme / kekerasan politik",
-  },
-
-  professional_risk: {
-    label: "Professional Risk",
-    icon: "💼",
-    desc: "Fraud, scam, fake profile",
-  },
+const RISK_LABELS: Record<string, { label: string; icon: string; desc: string }> = {
+  explicit_content:  { label: "Explicit Content",   icon: "🔞", desc: "Pornografi / konten vulgar" },
+  toxic_language:    { label: "Toxic Language",      icon: "🤬", desc: "Kata kasar, bullying, harassment" },
+  hate_speech:       { label: "Hate Speech",         icon: "🚫", desc: "Serangan ras, agama, gender" },
+  violence:          { label: "Violence",            icon: "💢", desc: "Ancaman kekerasan" },
+  extremism:         { label: "Extremism",           icon: "☢️", desc: "Terorisme / kekerasan politik" },
+  professional_risk: { label: "Professional Risk",   icon: "💼", desc: "Fraud, scam, fake profile" },
 };
 
 const PLATFORM_ICONS: Record<string, React.ElementType> = {
-  instagram: Instagram,
-  twitter: Twitter,
-  facebook: Globe,
-  linkedin: Linkedin,
-  google: Globe,
-  news: Newspaper,
+  instagram: Camera,
+  twitter:   MessageCircle,
+  facebook:  Globe,
+  linkedin:  Link2,
+  google:    Globe,
+  news:      Newspaper,
 };
 
-function ScoreBar({
-  score,
-}: {
-  score: number;
-}) {
+function ScoreBar({ score }: { score: number }) {
   const color =
-    score < 25
-      ? "bg-emerald-500"
-      : score < 50
-      ? "bg-amber-400"
-      : score < 75
-      ? "bg-orange-500"
-      : "bg-red-600";
-
+    score < 25 ? "#22c55e" : score < 50 ? "#f59e0b" : score < 75 ? "#f97316" : "#ef4444";
   return (
-    <div className="flex items-center gap-2.5">
-
-      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-700 ${color}`}
-          style={{
-            width: `${score}%`,
-          }}
-        />
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ flex: 1, height: 6, background: "var(--bg3)", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ width: `${score}%`, height: "100%", background: color, borderRadius: 99, transition: "width 0.7s ease" }} />
       </div>
-
-      <span
-        className={`text-xs font-bold w-8 text-right ${
-          score < 25
-            ? "text-emerald-600"
-            : score < 50
-            ? "text-amber-600"
-            : "text-red-600"
-        }`}
-      >
-        {score}
-      </span>
+      <span style={{ fontSize: 12, fontWeight: 700, color, width: 28, textAlign: "right" }}>{score}</span>
     </div>
   );
 }
 
 export default function CandidateDetailPage() {
-  const { id } = useParams<{
-    id: string;
-  }>();
-
-  const [candidate, setCandidate] =
-    useState<Candidate | null>(null);
-
-  const [report, setReport] =
-    useState<ScreeningReport | null>(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [tab, setTab] = useState<
-    "overview" | "details" | "flags"
-  >("overview");
+  const { id } = useParams<{ id: string }>();
+  const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const [report, setReport] = useState<ScreeningReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"overview" | "details" | "flags">("overview");
+  const [elapsed, setElapsed] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const [c, r] = await Promise.all([
-        api.getCandidate(id),
-        api.getReport(id),
-      ]);
-
+      const [c, r] = await Promise.all([api.getCandidate(id), api.getReport(id)]);
       setCandidate(c);
       setReport(r);
-
     } catch {
-      try {
-        setCandidate(
-          await api.getCandidate(id)
-        );
-      } catch {}
-
-    } finally {
-      setLoading(false);
-    }
+      try { setCandidate(await api.getCandidate(id)); } catch {}
+    } finally { setLoading(false); }
   }, [id]);
 
+  // Auto-refresh every 4s while processing
   useEffect(() => {
     load();
-
     const iv = setInterval(async () => {
       try {
         const r = await api.getReport(id);
-
         setReport(r);
-
-        if (
-          r.status === "completed" ||
-          r.status === "failed"
-        ) {
-          clearInterval(iv);
-        }
-
+        if (r.status === "completed" || r.status === "failed") clearInterval(iv);
       } catch {}
-    }, 3000);
-
+    }, 4000);
     return () => clearInterval(iv);
-
   }, [id, load]);
+
+  // Elapsed timer for processing state
+  useEffect(() => {
+    if (!report || report.status === "completed" || report.status === "failed") return;
+    const t = setInterval(() => setElapsed(e => e + 1), 1000);
+    return () => clearInterval(t);
+  }, [report?.status]);
 
   if (loading)
     return (
       <AppLayout>
-        <div className="min-h-screen bg-slate-50">
-          <div className="flex items-center justify-center py-32 text-slate-400">
-            <Loader2
-              size={24}
-              className="animate-spin mr-3"
-            />
-
+        <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--text3)", fontSize: 14 }}>
+            <Loader2 size={20} className="animate-spin" />
             Memuat data kandidat...
           </div>
         </div>
       </AppLayout>
     );
 
-  const isProcessing =
-    !report ||
-    report.status === "pending" ||
-    report.status === "processing";
+  const isProcessing = !report || report.status === "pending" || report.status === "processing";
+  const riskScores = report?.risk_scores ?? {};
+  const flagged = report?.flagged_content ?? [];
+  const profiles = report?.found_profiles ?? {};
+  const overallRisk = report?.overall_risk ?? "low";
 
-  const riskScores =
-    report?.risk_scores ?? {};
-
-  const flagged =
-    report?.flagged_content ?? [];
-
-  const profiles =
-    report?.found_profiles ?? {};
-
-  const overallRisk =
-    report?.overall_risk ?? "low";
+  const socials = [
+    { url: candidate?.instagram_url, Icon: Camera,       color: "#e1306c", label: "Instagram" },
+    { url: candidate?.twitter_url,   Icon: MessageCircle,color: "#1d9bf0", label: "Twitter/X" },
+    { url: candidate?.facebook_url,  Icon: Globe,        color: "#1877f2", label: "Facebook"  },
+    { url: candidate?.linkedin_url,  Icon: Link2,        color: "#0077b5", label: "LinkedIn"  },
+  ].filter(x => x.url && x.url !== "tidak ada");
 
   return (
     <AppLayout>
-      <div className="min-h-screen bg-slate-50">
+      <div style={{ minHeight: "100vh", background: "var(--bg)", padding: "0 0 60px" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto", padding: "32px 20px 0" }}>
 
-        <div className="max-w-4xl mx-auto px-4 py-10">
-
-          {/* BACK */}
-          <Link
-            href="/candidates"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition mb-6"
+          {/* Back */}
+          <Link href="/candidates" style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            fontSize: 12, fontWeight: 600, color: "var(--text3)",
+            textDecoration: "none", marginBottom: 24,
+            transition: "color 0.15s",
+          }}
+            onMouseEnter={e => e.currentTarget.style.color = "var(--text)"}
+            onMouseLeave={e => e.currentTarget.style.color = "var(--text3)"}
           >
-            <ArrowLeft size={13} />
-            Semua Kandidat
+            <ArrowLeft size={13} /> Semua Kandidat
           </Link>
 
-          {/* HEADER */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-4 flex items-start justify-between gap-4 flex-wrap">
-
-            <div className="flex items-center gap-4">
-
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-white text-xl font-extrabold flex-shrink-0">
-                {candidate?.full_name
-                  .charAt(0)
-                  .toUpperCase()}
+          {/* Header card */}
+          <div style={{
+            background: "var(--bg2)", border: "1px solid var(--border)",
+            borderRadius: 20, padding: "24px 28px",
+            boxShadow: "var(--sh-sm)", marginBottom: 16,
+            display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+            gap: 16, flexWrap: "wrap",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+              {/* Avatar */}
+              <div style={{
+                width: 60, height: 60, borderRadius: 18, flexShrink: 0,
+                background: "linear-gradient(135deg, var(--accent), #009e76)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 22, color: "#04130f",
+                boxShadow: "0 6px 20px var(--accent-g)",
+              }}>
+                {candidate?.full_name.charAt(0).toUpperCase()}
               </div>
 
               <div>
-                <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                <h1 style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 22, color: "var(--text)", letterSpacing: "-0.03em", marginBottom: 6 }}>
                   {candidate?.full_name}
                 </h1>
-
-                <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-slate-500">
-
-                  <span className="flex items-center gap-1">
-                    <Mail size={11} />
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 10 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "var(--text3)" }}>
+                    <Mail size={12} style={{ color: "var(--accent)" }} />
                     {candidate?.email}
                   </span>
-
-                  <span className="flex items-center gap-1">
-                    <Phone size={11} />
+                  <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "var(--text3)" }}>
+                    <Phone size={12} style={{ color: "var(--accent)" }} />
                     {candidate?.phone}
                   </span>
-
                 </div>
-
-                {/* SOCIAL */}
-                <div className="flex gap-2 mt-2.5">
-
-                  {[
-                    {
-                      url: candidate?.instagram_url,
-                      Icon: Instagram,
-                      color: "text-pink-500",
-                    },
-
-                    {
-                      url: candidate?.twitter_url,
-                      Icon: Twitter,
-                      color: "text-sky-500",
-                    },
-
-                    {
-                      url: candidate?.facebook_url,
-                      Icon: Globe,
-                      color: "text-blue-600",
-                    },
-
-                    {
-                      url: candidate?.linkedin_url,
-                      Icon: Linkedin,
-                      color: "text-blue-700",
-                    },
-
-                  ]
-                    .filter((x) => x.url)
-                    .map(
-                      (
-                        {
-                          url,
-                          Icon,
-                          color,
-                        },
-                        i
-                      ) => (
-                        <a
-                          key={i}
-                          href={url!}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`p-1.5 rounded-lg bg-slate-50 border border-slate-200 ${color} hover:scale-110 transition`}
-                        >
-                          <Icon size={13} />
-                        </a>
-                      )
-                    )}
-
-                </div>
+                {/* Socials */}
+                {socials.length > 0 && (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {socials.map(({ url, Icon, color, label }, i) => (
+                      <a key={i} href={url!} target="_blank" rel="noopener noreferrer"
+                        title={label}
+                        style={{
+                          width: 32, height: 32, borderRadius: 10, display: "flex",
+                          alignItems: "center", justifyContent: "center",
+                          background: "var(--bg3)", border: "1px solid var(--border)",
+                          color, transition: "all 0.15s", textDecoration: "none",
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.12)"; e.currentTarget.style.borderColor = color; }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+                      >
+                        <Icon size={14} />
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* OVERALL RISK */}
-            {!isProcessing && (
-              <div className="text-right">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  Risk Overall
-                </p>
-
-                <RiskBadge
-                  level={overallRisk}
-                  large
-                />
+            {/* Risk badge or processing */}
+            {isProcessing ? (
+              <div style={{
+                display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6,
+              }}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  background: "var(--warn-d)", border: "1px solid rgba(245,158,11,0.2)",
+                  borderRadius: 12, padding: "8px 14px",
+                }}>
+                  <Loader2 size={14} className="animate-spin" style={{ color: "var(--warning)" }} />
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--warning)" }}>
+                    {report?.status === "pending" ? "Menunggu..." : "Sedang diproses"}
+                  </span>
+                </div>
+                <span style={{ fontSize: 11, color: "var(--text3)", display: "flex", alignItems: "center", gap: 4 }}>
+                  <Clock size={11} /> {elapsed}s • auto-refresh tiap 4 detik
+                </span>
+              </div>
+            ) : (
+              <div style={{ textAlign: "right" }}>
+                <p style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Risk Overall</p>
+                <RiskBadge level={overallRisk} large />
               </div>
             )}
-
           </div>
+
+          {/* Processing banner */}
+          {isProcessing && (
+            <div style={{
+              background: "var(--bg2)", border: "1px solid var(--border)",
+              borderRadius: 16, padding: "28px 28px",
+              boxShadow: "var(--sh-sm)", marginBottom: 16,
+              display: "flex", flexDirection: "column", alignItems: "center",
+              gap: 14, textAlign: "center",
+            }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: "50%",
+                background: "var(--accent-d)", border: "2px solid var(--accent)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <ShieldAlert size={24} style={{ color: "var(--accent)" }} />
+              </div>
+              <div>
+                <p style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 16, color: "var(--text)", marginBottom: 6 }}>
+                  AI Screening Berjalan
+                </p>
+                <p style={{ fontSize: 13, color: "var(--text3)", lineHeight: 1.6, maxWidth: 420 }}>
+                  Sistem sedang menganalisis profil sosial media kandidat. Proses ini biasanya memakan waktu 1–3 menit. Halaman akan otomatis diperbarui.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                {["Instagram", "Twitter/X", "Facebook", "LinkedIn", "Google", "Berita"].map(p => (
+                  <span key={p} style={{
+                    fontSize: 11.5, fontWeight: 600, padding: "4px 12px", borderRadius: 99,
+                    background: "var(--bg3)", color: "var(--text3)", border: "1px solid var(--border)",
+                    display: "flex", alignItems: "center", gap: 5,
+                  }}>
+                    <Loader2 size={10} className="animate-spin" style={{ opacity: 0.5 }} />
+                    {p}
+                  </span>
+                ))}
+              </div>
+              <button onClick={load} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 18px", borderRadius: 10,
+                background: "transparent", border: "1px solid var(--border)",
+                color: "var(--text3)", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = "var(--bg3)"; e.currentTarget.style.color = "var(--text)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text3)"; }}
+              >
+                <RefreshCw size={13} /> Refresh Manual
+              </button>
+            </div>
+          )}
+
+          {/* Results */}
+          {!isProcessing && report?.status === "completed" && (
+            <>
+              {/* Tabs */}
+              <div style={{ display: "flex", gap: 4, marginBottom: 16, background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 14, padding: 4 }}>
+                {(["overview", "details", "flags"] as const).map(t => (
+                  <button key={t} onClick={() => setTab(t)} style={{
+                    flex: 1, padding: "9px 0", borderRadius: 10, border: "none",
+                    background: tab === t ? "var(--accent)" : "transparent",
+                    color: tab === t ? "#04130f" : "var(--text3)",
+                    fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 12.5,
+                    cursor: "pointer", transition: "all 0.18s", textTransform: "capitalize",
+                    letterSpacing: "-0.01em",
+                  }}>
+                    {t === "overview" ? "Ringkasan" : t === "details" ? "Skor Risiko" : `Konten Flagged ${flagged.length > 0 ? `(${flagged.length})` : ""}`}
+                  </button>
+                ))}
+              </div>
+
+              {/* Overview */}
+              {tab === "overview" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {/* AI Summary */}
+                  {report.ai_summary && (
+                    <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 18, padding: "22px 24px", boxShadow: "var(--sh-sm)" }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>AI Summary</p>
+                      <p style={{ fontSize: 14, color: "var(--text2)", lineHeight: 1.75 }}>{report.ai_summary}</p>
+                    </div>
+                  )}
+
+                  {/* Found profiles */}
+                  {Object.keys(profiles).length > 0 && (
+                    <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 18, padding: "22px 24px", boxShadow: "var(--sh-sm)" }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>Profil Ditemukan</p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {Object.entries(profiles).map(([platform, url]) => {
+                          const Icon = PLATFORM_ICONS[platform.toLowerCase()] ?? Globe;
+                          return (
+                            <a key={platform} href={url} target="_blank" rel="noopener noreferrer" style={{
+                              display: "flex", alignItems: "center", gap: 12,
+                              padding: "10px 14px", borderRadius: 12,
+                              background: "var(--bg3)", border: "1px solid var(--border)",
+                              textDecoration: "none", transition: "all 0.15s",
+                            }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--accent-d)"; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg3)"; }}
+                            >
+                              <Icon size={15} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", flex: 1 }}>{platform}</span>
+                              <span style={{ fontSize: 11.5, color: "var(--text3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>{url}</span>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Skor risiko */}
+              {tab === "details" && (
+                <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 18, padding: "22px 24px", boxShadow: "var(--sh-sm)" }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 18 }}>Skor Per Kategori</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {Object.entries(riskScores).map(([key, score]) => {
+                      const info = RISK_LABELS[key];
+                      return (
+                        <div key={key}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                              {info?.icon} {info?.label ?? key}
+                            </span>
+                            <span style={{ fontSize: 11.5, color: "var(--text3)" }}>{info?.desc}</span>
+                          </div>
+                          <ScoreBar score={score} />
+                        </div>
+                      );
+                    })}
+                    {Object.keys(riskScores).length === 0 && (
+                      <p style={{ fontSize: 13, color: "var(--text3)", textAlign: "center", padding: "20px 0" }}>Tidak ada skor risiko tersedia.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Flagged content */}
+              {tab === "flags" && (
+                <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 18, padding: "22px 24px", boxShadow: "var(--sh-sm)" }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 18 }}>Konten Bermasalah</p>
+                  {flagged.length === 0 ? (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "28px 0", color: "var(--text3)" }}>
+                      <CheckCircle size={32} style={{ color: "var(--accent)" }} />
+                      <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Tidak ada konten bermasalah</p>
+                      <p style={{ fontSize: 13 }}>Kandidat ini lolos screening tanpa flag.</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {flagged.map((f, i) => (
+                        <div key={i} style={{
+                          padding: "14px 16px", borderRadius: 14,
+                          background: "var(--danger-d)", border: "1px solid rgba(239,68,68,0.15)",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                            <AlertTriangle size={13} style={{ color: "var(--danger)", flexShrink: 0 }} />
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--danger)" }}>{f.platform}</span>
+                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgba(239,68,68,0.12)", color: "var(--danger)", fontWeight: 600 }}>{f.category}</span>
+                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "var(--bg3)", color: "var(--text3)", fontWeight: 600, marginLeft: "auto" }}>{f.severity}</span>
+                          </div>
+                          <p style={{ fontSize: 13, color: "var(--text2)", lineHeight: 1.6 }}>{f.content_snippet}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Failed */}
+          {report?.status === "failed" && (
+            <div style={{
+              background: "var(--bg2)", border: "1px solid var(--border)",
+              borderRadius: 18, padding: "32px 28px", boxShadow: "var(--sh-sm)",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center",
+            }}>
+              <AlertTriangle size={32} style={{ color: "var(--danger)" }} />
+              <p style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 16, color: "var(--text)" }}>Screening Gagal</p>
+              <p style={{ fontSize: 13, color: "var(--text3)" }}>{report.error_message ?? "Terjadi kesalahan saat proses screening."}</p>
+              <button onClick={load} style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "9px 20px",
+                borderRadius: 10, background: "var(--danger-d)", border: "1px solid rgba(239,68,68,0.2)",
+                color: "var(--danger)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}>
+                <RefreshCw size={13} /> Coba Lagi
+              </button>
+            </div>
+          )}
+
         </div>
       </div>
     </AppLayout>

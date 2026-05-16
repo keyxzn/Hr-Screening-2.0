@@ -29,11 +29,14 @@
   --success:  #22c55e;
   --succ-d:   rgba(34,197,94,0.10);
 
-  --sidebar:  #080d1a;
-  --sb2:      #0d1526;
-  --sb-bdr:   rgba(255,255,255,0.05);
-  --sb-muted: #3d4f6b;
-  --sb-text:  #6d82a0;
+  --sidebar:     #101826;
+  --sb2:         #172035;
+  --sb-bdr:      rgba(255,255,255,0.07);
+  --sb-muted:    rgba(148,163,184,0.55);
+  --sb-text:     rgba(148,163,184,0.85);
+  --sb-heading:  #f1f5f9;
+  --sb-btn:      rgba(255,255,255,0.05);
+  --sb-btn-hover:rgba(255,255,255,0.10);
 
   --sh-sm:  0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.05);
   --sh-md:  0 4px 16px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
@@ -67,6 +70,15 @@
   --warn-d:   rgba(251,191,36,0.10);
   --success:  #4ade80;
   --succ-d:   rgba(74,222,128,0.10);
+
+  --sidebar:     #070b14;
+  --sb2:         #0d1526;
+  --sb-bdr:      rgba(255,255,255,0.06);
+  --sb-muted:    rgba(100,120,150,0.7);
+  --sb-text:     rgba(148,163,184,0.85);
+  --sb-heading:  #e4eaf8;
+  --sb-btn:      rgba(255,255,255,0.05);
+  --sb-btn-hover:rgba(255,255,255,0.10);
 
   --sh-sm:  0 1px 2px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
   --sh-md:  0 4px 16px rgba(0,0,0,0.35);
