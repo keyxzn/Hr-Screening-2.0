@@ -40,15 +40,17 @@ export default function CandidatesPage() {
     all:        rows.length,
     low:        rows.filter(r=>r.report?.overall_risk==="low").length,
     medium:     rows.filter(r=>r.report?.overall_risk==="medium").length,
-    high:       rows.filter(r=>r.report?.overall_risk==="high"||r.report?.overall_risk==="critical").length,
+    high:       rows.filter(r=>r.report?.overall_risk==="high").length,
+    critical:   rows.filter(r=>r.report?.overall_risk==="critical").length,
     processing: rows.filter(r=>r.report?.status==="processing"||r.report?.status==="pending").length,
   };
 
   const FILTERS = [
     { key:"all",        label:"Semua",    count:cnts.all,        dot:"" },
-    { key:"low",        label:"Low Risk", count:cnts.low,        dot:"var(--success)" },
+    { key:"low",        label:"Rendah",   count:cnts.low,        dot:"var(--success)" },
     { key:"medium",     label:"Sedang",   count:cnts.medium,     dot:"var(--warning)" },
     { key:"high",       label:"Tinggi",   count:cnts.high,       dot:"var(--danger)" },
+    { key:"critical",   label:"Kritis",   count:cnts.critical,   dot:"#dc2626" },
     { key:"processing", label:"Diproses", count:cnts.processing, dot:"var(--blue)" },
   ];
 
