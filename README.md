@@ -58,11 +58,11 @@ cp .env.example .env
 # Edit .env sesuai konfigurasi kamu
 
 # Jalankan backend
-uvicorn app.main:app --reload --port 8001
+uvicorn app.main:app --reload --port 8000
 ```
 
-Backend akan jalan di: http://localhost:8001 
-Dokumentasi API: http://localhost:8001/docs
+Backend akan jalan di: http://localhost:8000 
+Dokumentasi API: http://localhost:8000/docs
 
 ### 4. Setup Ollama (AI Lokal)
 
@@ -84,7 +84,7 @@ cd frontend
 npm install
 
 # Buat file environment
-echo "NEXT_PUBLIC_API_URL=http://localhost:8001" > .env.local
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
 
 # Jalankan frontend
 npm run dev

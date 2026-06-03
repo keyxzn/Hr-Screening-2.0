@@ -77,7 +77,7 @@ Gunakan pengetahuanmu tentang reputasi publik tokoh berikut:
 - Uya Kuya: presenter kontroversial, sering buat konten hipnosis yang dipertanyakan → professional_risk SEDANG (40-55), toxic_language SEDANG (25-40)
 - Eko Patrio: komedian/politisi, anggota DPR, relatif bersih → professional_risk RENDAH (15-25), toxic_language RENDAH (10-20)
 - Surya Utama, Surya Dini, Denise Chariesta (nama umum/tidak dikenal publik): jika TIDAK ada bukti spesifik dari scraping → SEMUA skor 0-10, jangan kasih default 20-30
-- PENTING: Jika nama tidak dikenal dan data scraping tidak menunjukkan masalah spesifik → skor HARUS 0, bukan 20 atau 30
+- PENTING: Jika nama tidak dikenal dan data scraping tidak menunjukkan masalah spesifik → gunakan pengetahuanmu dalam analysis untuk melihat data mereka jika ada, kalau tidak ada sama sekali kamu buat 0, jangan default 20 atau 30
 - Dan figur publik lain — gunakan pengetahuanmu tentang reputasi mereka secara akurat.
 
 WAJIB:
@@ -117,18 +117,18 @@ INSTRUKSI WAJIB — BACA SEBELUM MENJAWAB:
    untuk kategori tersebut — gunakan sebagai bukti pendukung.
 
 4. flagged_content WAJIB mengikuti aturan ini:
-   a. MINIMAL 1 item per kategori yang skornya > 0 — jadi jika 6 kategori semua > 0, minimal 6 item
+   a. MINIMAL 1 item per kategori yang skornya > 0
    b. Targetkan 6-10 item total — cari semua bukti yang ada di data scraping
    c. Boleh lebih dari 1 item per kategori jika ada beberapa bukti berbeda
    d. Setiap item harus punya detail:
-      - platform: instagram / google search / berita media / twitter / facebook / youtube
-      - category: salah satu dari explicit_content/toxic_language/hate_speech/violence/extremism/professional_risk
+      - platform: instagram / google search / berita media / twitter / facebook
+      - category: explicit_content/toxic_language/hate_speech/violence/extremism/professional_risk
       - severity: rendah/sedang/tinggi/kritis
-      - content_snippet: penjelasan SPESIFIK — sebutkan nama kasus, kejadian, atau konten yang bermasalah
-      - source_url: URL artikel/bukti dari data scraping (format URL:https://... yang ada di data)
-        * PRIORITAS: artikel berita spesifik (detik, kompas, tribun, kumparan, tempo, liputan6)
-        * Fallback: URL profil sosmed jika tidak ada artikel
-        * WAJIB https://, jangan placeholder atau URL palsu
+      - content_snippet: penjelasan SPESIFIK — sebutkan nama kasus, kejadian, atau konten
+      - source_url: HANYA dari daftar URL yang benar-benar ADA di data scraping di atas.
+        * DILARANG KERAS membuat URL baru, menebak URL, atau memodifikasi URL
+        * Jika tidak ada URL yang relevan, gunakan null atau kosongkan field ini
+        * JANGAN pernah menulis URL yang tidak ada persis di data scraping
 ═══════════════════════════════════════════════════════════
 
 Berikan respons dalam format JSON:
@@ -280,17 +280,85 @@ def _ensure_min_flagged(flagged: list, scores: dict, raw_data: dict) -> list:
         if score >= 25: return "sedang"
         return "rendah"
 
+    # Kumpulkan semua URL yang BENAR-BENAR ada di scraping result (untuk validasi)
+    valid_scraping_urls = set()
+
+    def _collect_url(u: str):
+        if u and u.startswith("http"):
+            valid_scraping_urls.add(u.strip())
+
+    # Google CSE results
+    for r in raw_data.get("google", {}).get("results", []):
+        _collect_url(r.get("url", ""))
+
+    # News articles
+    for a in raw_data.get("news", {}).get("articles", []):
+        _collect_url(a.get("url", ""))
+
+    # Instagram / Facebook / Twitter — posts & web_results
+    for platform in ["instagram", "facebook", "twitter"]:
+        pdata = raw_data.get(platform, {})
+        for post in pdata.get("posts", []):
+            _collect_url(post.get("source_url", ""))
+            _collect_url(post.get("url", ""))
+        for wr in pdata.get("web_results", []):
+            _collect_url(wr.get("url", ""))
+        # Profile URL itself
+        _collect_url(pdata.get("profile_url", ""))
+
+    # LinkedIn
+    _collect_url(raw_data.get("linkedin", {}).get("profile_url", ""))
+
+    # Fallback: also collect from all_evidence URLs that came from scraping
+    # (so AI-returned URLs from _prepare_content are recognized)
+    for ev in all_evidence:
+        _collect_url(ev.get("url", ""))
+
+    import urllib.parse
+
+    # Validasi dan fix semua source_url di flagged items
+    for item in flagged:
+        url = item.get("source_url", "")
+        snippet = item.get("content_snippet", "") or ""
+        platform = (item.get("platform", "") or "").lower()
+        category = (item.get("category", "") or "").replace("_", " ")
+
+        # Cek apakah URL valid dari scraping
+        url_is_valid = url and url.startswith("http") and url in valid_scraping_urls
+
+        if url_is_valid:
+            # URL beneran dari scraping — keep as is
+            pass
+        elif url and url.startswith("https://www.google.com/search"):
+            # Sudah Google Search URL — keep tapi improve query
+            pass
+        else:
+            # URL palsu dari AI (instagram.com/p/..., x.com/status/..., detik.com/...)
+            # Ganti dengan Google Search yang relevan dan spesifik
+            # Ambil keyword utama dari snippet
+            words = snippet.split()[:10]
+            short_snippet = " ".join(words)
+            query = urllib.parse.quote_plus(short_snippet)
+            item["source_url"] = f"https://www.google.com/search?q={query}"
+            item["source_label"] = f"Cari di Google"
+
     # Auto-fill untuk kategori yang belum terpenuhi
     for cat in RISK_CATEGORIES:
         if scores.get(cat, 0) > 0 and cat not in covered:
             # Cari evidence yang relevan untuk kategori ini
             candidates = [
                 e for e in all_evidence
-                if ctx_to_cat.get(e["risk_context"], "") == cat and e.get("url") and e.get("snippet")
+                if ctx_to_cat.get(e["risk_context"], "") == cat
+                and e.get("url") and e.get("snippet")
+                and e["url"] in valid_scraping_urls  # hanya URL valid dari scraping
             ]
-            # Fallback: pakai evidence apapun yang ada URL
+            # Fallback: pakai evidence apapun yang URL-nya valid
             if not candidates:
-                candidates = [e for e in all_evidence if e.get("url") and e.get("snippet")]
+                candidates = [
+                    e for e in all_evidence
+                    if e.get("url") and e.get("snippet")
+                    and e["url"] in valid_scraping_urls
+                ]
 
             if candidates:
                 best = candidates[0]
@@ -300,6 +368,16 @@ def _ensure_min_flagged(flagged: list, scores: dict, raw_data: dict) -> list:
                     "severity": get_severity(scores[cat]),
                     "content_snippet": best["snippet"],
                     "source_url": best["url"],
+                })
+                covered.add(cat)
+            else:
+                # Tidak ada URL valid — tetap tambah item tapi tanpa source_url
+                flagged.append({
+                    "platform": "google search",
+                    "category": cat,
+                    "severity": get_severity(scores[cat]),
+                    "content_snippet": f"Indikasi {cat.replace('_',' ')} ditemukan dari analisis nama kandidat.",
+                    "source_url": None,
                 })
                 covered.add(cat)
 

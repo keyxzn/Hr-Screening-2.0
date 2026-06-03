@@ -55,6 +55,11 @@ export interface ScreeningReport {
   }>;
   ai_summary?: string; error_message?: string;
   created_at: string; completed_at?: string;
+  // Assessment fields (No. 1 BCA)
+  assessment_status?: "appropriate" | "inappropriate";
+  assessed_by?: string;
+  assessed_by_name?: string;
+  assessed_at?: string;
 }
 
 export const api = {
@@ -64,4 +69,33 @@ export const api = {
   getCandidate:   (id: string) => req<Candidate>(`/candidates/${id}`),
   deleteCandidate:(id: string) => req<{ message: string }>(`/candidates/${id}`, { method: "DELETE" }),
   getReport:      (candidateId: string) => req<ScreeningReport>(`/reports/${candidateId}`),
+};
+
+// ── Assessment (No. 1) ────────────────────────────────────
+export interface AssessmentUpdate {
+  assessment_status: "appropriate" | "inappropriate";
+}
+export const assessReport = (reportId: string, data: AssessmentUpdate) =>
+  req<ScreeningReport>(`/reports/${reportId}/assess`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+
+// ── User Management (No. 7) ───────────────────────────────
+export interface HRUser {
+  id: string; email: string; full_name: string;
+  role: string; is_active: boolean; created_at: string;
+}
+export interface UserCreate {
+  email: string; full_name: string; password: string; role?: string;
+}
+export interface UserUpdate {
+  full_name?: string; email?: string; password?: string;
+  role?: string; is_active?: boolean;
+}
+export const userApi = {
+  list:   ()                        => req<HRUser[]>("/users/"),
+  create: (d: UserCreate)           => req<HRUser>("/users/", { method: "POST", body: JSON.stringify(d) }),
+  update: (id: string, d: UserUpdate) => req<HRUser>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(d) }),
+  delete: (id: string)              => req<{ message: string }>(`/users/${id}`, { method: "DELETE" }),
 };

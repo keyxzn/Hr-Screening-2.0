@@ -8,10 +8,10 @@ import { useState } from "react";
 import {
   LayoutDashboard, Users, Plus, Upload,
   LogOut, ChevronDown, ChevronRight,
-  Sun, Moon, Shield, X, PanelLeftClose, PanelLeft,
+  Sun, Moon, Shield, X, PanelLeftClose, PanelLeft, Settings,
 } from "lucide-react";
 
-const NAV = [
+const getNav = (isAdmin: boolean) => [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   {
     label: "Kandidat", icon: Users,
@@ -21,6 +21,12 @@ const NAV = [
       { label: "Bulk Upload",   href: "/candidates/bulk", icon: Upload },
     ],
   },
+  ...(isAdmin ? [{
+    label: "Pengaturan", icon: Settings,
+    children: [
+      { label: "User Management", href: "/settings/users", icon: Shield },
+    ],
+  }] : []),
 ];
 
 const BG  = "linear-gradient(180deg,#0d1117 0%,#111827 100%)";
@@ -34,6 +40,8 @@ function Body({ onNav, collapsed }: BodyProps) {
   const { user, logout } = useAuth();
   const { dark, toggle } = useTheme();
   const [open, setOpen]  = useState(["Kandidat"]);
+  const isAdmin = user?.role === "admin";
+  const NAV = getNav(isAdmin);
 
   function NavLink({ href, icon: Icon, label, exact }: { href: string; icon: any; label: string; exact?: boolean }) {
     const active = exact ? path === href : path === href;

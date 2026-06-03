@@ -5,11 +5,13 @@ import AppLayout from "@/components/AppLayout";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import RiskBadge from "@/components/RiskBadge";
-import { api, Candidate, ScreeningReport } from "@/lib/api";
+import { api, assessReport, Candidate, ScreeningReport } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import {
   ArrowLeft, Loader2, RefreshCw, Camera, MessageCircle,
   Globe, Link2, Newspaper, AlertTriangle, CheckCircle,
-  ShieldAlert, Mail, Phone, Clock, ExternalLink,
+  ShieldAlert, Mail, Phone, Clock, ExternalLink, Download,
+  ThumbsUp, ThumbsDown, User, Calendar,
 } from "lucide-react";
 
 const RISK_LABELS: Record<string, { label: string; icon: string; desc: string }> = {
@@ -71,11 +73,370 @@ function ScoreBar({ score }: { score: number }) {
 
 export default function CandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [report, setReport] = useState<ScreeningReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "details" | "flags">("overview");
   const [elapsed, setElapsed] = useState(0);
+  const [assessing, setAssessing] = useState(false);
+
+  const handleAssess = async (status: "appropriate" | "inappropriate") => {
+    if (!report) return;
+    setAssessing(true);
+    try {
+      const updated = await assessReport(report.id, { assessment_status: status });
+      setReport(updated);
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      alert("Gagal menyimpan keputusan HR: " + msg);
+      console.error("assess error:", e);
+    } finally { setAssessing(false); }
+  };
+
+  const handleDownload = async () => {
+    if (!candidate || !report) return;
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+    const scores  = report.risk_scores  ?? {};
+    const flagged = report.flagged_content ?? [];
+    const W = 210, H = 297, m = 15;
+    let y = 0;
+
+    // ── Palette ──────────────────────────────────────────────────────────────
+    const riskLabel: Record<string,string> = { low:"Rendah", medium:"Sedang", high:"Tinggi", critical:"Kritis" };
+    const riskRGB:   Record<string,[number,number,number]> = {
+      low:[5,150,105], medium:[217,119,6], high:[220,38,38], critical:[153,27,27]
+    };
+    const risk = report.overall_risk ?? "low";
+    const AC: [number,number,number] = riskRGB[risk];
+
+    const DARK:  [number,number,number] = [15,23,42];
+    const MID:   [number,number,number] = [71,85,105];
+    const LIGHT: [number,number,number] = [148,163,184];
+    const BG:    [number,number,number] = [248,250,252];
+    const WHITE: [number,number,number] = [255,255,255];
+    const BDR:   [number,number,number] = [220,228,240];
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Strip non-latin chars & escape % so jsPDF helvetica renders cleanly
+    const safe = (s:string) =>
+      (s??"").replace(/%/g,"%%").replace(/[^\x00-\x7E\u00C0-\u024F]/g,"").trim();
+
+    const newPage = () => { doc.addPage(); y = 20; };
+    const guard   = (need:number) => { if (y + need > 272) newPage(); };
+
+    // jsPDF text baseline is at the bottom of the cap-height.
+    // For Helvetica: visual centre ≈ circleY + fontSize_pt * 0.176  (empirically tuned)
+    const circleText = (txt:string, cx:number, cy2:number, r:number, fgArr:[number,number,number], fs=8) => {
+      doc.setFont("helvetica","bold"); doc.setFontSize(fs); doc.setTextColor(...fgArr);
+      // offset = radius * 0.38 gives good vertical centring for typical single-char / 2-char labels
+      doc.text(txt, cx, cy2 + r*0.38, {align:"center"});
+    };
+
+    // Filled rounded pill
+    const pill = (txt:string, px:number, py2:number, bgC:[number,number,number], fgC:[number,number,number], pw=24) => {
+      doc.setFillColor(...bgC);
+      doc.roundedRect(px, py2, pw, 6.5, 1.5, 1.5, "F");
+      doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(...fgC);
+      doc.text(txt, px + pw/2, py2 + 4.4, {align:"center"});
+    };
+
+    // Section heading: coloured left bar + bold label + faint rule
+    const heading = (txt:string) => {
+      guard(16);
+      doc.setFillColor(...AC);
+      doc.roundedRect(m, y, 3.5, 10, 1, 1, "F");
+      doc.setFont("helvetica","bold"); doc.setFontSize(9.5); doc.setTextColor(...DARK);
+      doc.text(txt, m+7, y+7.2);
+      doc.setDrawColor(...BDR); doc.setLineWidth(0.25);
+      const lx = m + 7 + doc.getTextWidth(txt) + 4;
+      doc.line(lx, y+4, W-m, y+4);
+      y += 15;
+    };
+
+    // ════════════════════════════════════════════════════════════════════════
+    // HEADER
+    // ════════════════════════════════════════════════════════════════════════
+    doc.setFillColor(15,23,42);
+    doc.rect(0, 0, W, 42, "F");
+    doc.setFillColor(...AC);
+    doc.rect(0, 42, W, 2.5, "F");
+
+    // Logo square
+    doc.setFillColor(...AC);
+    doc.roundedRect(m, 9, 24, 24, 3, 3, "F");
+    circleText("HR", m+12, 9+12, 12, WHITE, 12);
+
+    // Brand
+    doc.setFont("helvetica","bold"); doc.setFontSize(19); doc.setTextColor(...WHITE);
+    doc.text("HRCheck", m+32, 23);
+    doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(...LIGHT);
+    doc.text("AI Recruitment Screening Platform", m+32, 30);
+
+    // Meta right
+    doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(200,210,225);
+    doc.text("BACKGROUND CHECK REPORT", W-m, 18, {align:"right"});
+    doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(...LIGHT);
+    doc.text(new Date().toLocaleString("id-ID"), W-m, 25, {align:"right"});
+    doc.text(`Report ID: ${safe(report.id.slice(0,20))}...`, W-m, 32, {align:"right"});
+
+    y = 52;
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CANDIDATE INFO CARD
+    // ════════════════════════════════════════════════════════════════════════
+    const cH = 36;
+    doc.setFillColor(...BG);
+    doc.roundedRect(m, y, W-m*2, cH, 3, 3, "F");
+    doc.setDrawColor(...BDR); doc.setLineWidth(0.3);
+    doc.roundedRect(m, y, W-m*2, cH, 3, 3, "S");
+    // Accent left bar
+    doc.setFillColor(...AC);
+    doc.roundedRect(m, y, 3, cH, 1.5, 1.5, "F");
+
+    // Avatar circle — cx, cy, r
+    const avCX = m+18, avCY = y+cH/2, avR = 12;
+    doc.setFillColor(...AC);
+    doc.circle(avCX, avCY, avR, "F");
+    circleText(candidate.full_name.charAt(0).toUpperCase(), avCX, avCY, avR, WHITE, 14);
+
+    // Candidate text
+    const tx = m+34;
+    doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(...DARK);
+    doc.text(safe(candidate.full_name), tx, y+12);
+    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(...MID);
+    doc.text(`Email : ${safe(candidate.email)}`, tx, y+20);
+    doc.text(`Telp  : ${safe(candidate.phone??"-")}`, tx, y+27);
+    doc.setFontSize(6.5); doc.setTextColor(...LIGHT);
+    doc.text(`ID: ${safe(candidate.id)}`, tx, y+33);
+
+    // Risk badge
+    const bdgW = 38, bdgH = 22, bdgX = W-m-bdgW-2, bdgY = y+(cH-bdgH)/2;
+    doc.setFillColor(...AC);
+    doc.roundedRect(bdgX, bdgY, bdgW, bdgH, 3, 3, "F");
+    doc.setFont("helvetica","bold"); doc.setFontSize(6.5); doc.setTextColor(...WHITE);
+    doc.text("RISK LEVEL", bdgX+bdgW/2, bdgY+7, {align:"center"});
+    doc.setFontSize(11);
+    doc.text((riskLabel[risk]??"").toUpperCase(), bdgX+bdgW/2, bdgY+17, {align:"center"});
+
+    y += cH + 10;
+
+    // ════════════════════════════════════════════════════════════════════════
+    // RISK SCORES — full-width single column, clean grid
+    // ════════════════════════════════════════════════════════════════════════
+    heading("SKOR RISIKO PER KATEGORI");
+
+    const cats: {label:string; key:string; clr:[number,number,number]}[] = [
+      {label:"Explicit Content",  key:"explicit_content",  clr:[124,58,237]},
+      {label:"Toxic Language",    key:"toxic_language",    clr:[234,88,12]},
+      {label:"Hate Speech",       key:"hate_speech",       clr:[202,138,4]},
+      {label:"Violence",          key:"violence",          clr:[185,28,28]},
+      {label:"Extremism",         key:"extremism",         clr:[51,65,85]},
+      {label:"Professional Risk", key:"professional_risk", clr:[220,38,38]},
+    ];
+
+    // Fixed zones (mm) — all relative to left margin
+    const LBL = 46;   // label column width
+    const SCR = 14;   // score "75%" width
+    const PLW = 24;   // pill width
+    const GAP = 4;    // gaps
+    const BARW = W - m*2 - LBL - SCR - PLW - GAP*3;
+    const RH = 12;    // row height
+
+    cats.forEach((cat, i) => {
+      guard(RH + 2);
+      const ry = y;
+
+      // Row background (every row, slight alternation)
+      doc.setFillColor(i%2===0 ? 249 : 244, i%2===0 ? 250 : 247, i%2===0 ? 252 : 251);
+      doc.roundedRect(m, ry, W-m*2, RH, 1.5, 1.5, "F");
+
+      const score = Math.round((scores[cat.key]??0) as number);
+      const tagC: [number,number,number] = score<30?[5,150,105]:score<60?[217,119,6]:[220,38,38];
+      const tag = score<30?"AMAN":score<60?"SEDANG":score<80?"TINGGI":"KRITIS";
+
+      // Label
+      doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(...MID);
+      doc.text(cat.label, m+3, ry+8);
+
+      // Bar track
+      const bx = m + LBL, by2 = ry+4, bh = 4;
+      doc.setFillColor(...BDR);
+      doc.roundedRect(bx, by2, BARW, bh, 1, 1, "F");
+      if (score > 0) {
+        doc.setFillColor(...cat.clr);
+        doc.roundedRect(bx, by2, Math.max(2, (score/100)*BARW), bh, 1, 1, "F");
+      }
+
+      // Score number — right-aligned just before pill
+      const scrX = bx + BARW + GAP;
+      doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(...tagC);
+      doc.text(`${score}%`, scrX + SCR, ry+8, {align:"right"});
+
+      // Status pill
+      pill(tag, scrX + SCR + GAP, ry+3, tagC, WHITE, PLW);
+
+      y += RH;
+    });
+
+    y += 10;
+
+    // ════════════════════════════════════════════════════════════════════════
+    // AI SUMMARY
+    // ════════════════════════════════════════════════════════════════════════
+    heading("AI SUMMARY");
+    guard(20);
+    const sumText  = safe(report.ai_summary ?? "Tidak ada ringkasan.");
+    const sumLines = doc.splitTextToSize(sumText, W-m*2-14);
+    const sumH     = Math.max(18, sumLines.length * 5.5 + 10);
+
+    doc.setFillColor(...AC);
+    doc.rect(m, y, 3, sumH, "F");
+    doc.setFillColor(246,249,253);
+    doc.roundedRect(m+3, y, W-m*2-3, sumH, 2, 2, "F");
+    doc.setDrawColor(...BDR); doc.setLineWidth(0.2);
+    doc.roundedRect(m+3, y, W-m*2-3, sumH, 2, 2, "S");
+    doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(25,35,55);
+    sumLines.forEach((l:string, idx:number) => {
+      guard(6);
+      doc.text(l, m+8, y+8+idx*5.5);
+    });
+    y += sumH + 10;
+
+    // ════════════════════════════════════════════════════════════════════════
+    // FLAGGED CONTENT
+    // ════════════════════════════════════════════════════════════════════════
+    heading(`KONTEN BERMASALAH (${flagged.length})`);
+
+    if (flagged.length === 0) {
+      guard(18);
+      doc.setFillColor(209,250,229);
+      doc.roundedRect(m, y, W-m*2, 18, 3, 3, "F");
+      doc.setDrawColor(5,150,105); doc.setLineWidth(0.3);
+      doc.roundedRect(m, y, W-m*2, 18, 3, 3, "S");
+      // Green circle
+      const gcx = m+13, gcy = y+9;
+      doc.setFillColor(5,150,105);
+      doc.circle(gcx, gcy, 5.5, "F");
+      circleText("OK", gcx, gcy, 5.5, WHITE, 7.5);
+      doc.setFont("helvetica","bold"); doc.setFontSize(9.5); doc.setTextColor(4,80,56);
+      doc.text("Tidak ada konten bermasalah", m+23, y+8);
+      doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(4,100,70);
+      doc.text("Kandidat lolos screening tanpa flag apapun.", m+23, y+14);
+      y += 24;
+    } else {
+      flagged.forEach((f:any, i:number) => {
+        const sev = (f.severity??"").toLowerCase();
+        const isCrit   = sev==="kritis"||sev==="critical";
+        const isHigh   = sev==="tinggi"||sev==="high";
+        const isMed    = sev==="sedang"||sev==="medium";
+        const sevC:[number,number,number] = isCrit?[153,27,27]:isHigh?[220,38,38]:isMed?[217,119,6]:[5,150,105];
+        const sevLabel = isCrit?"KRITIS":isHigh?"TINGGI":isMed?"SEDANG":"RENDAH";
+
+        const snipLines = f.content_snippet
+          ? doc.splitTextToSize(safe(f.content_snippet), W-m*2-28)
+          : [];
+        const crdH = 18 + Math.min(snipLines.length, 3) * 5;
+        guard(crdH + 5);
+
+        // Card
+        doc.setFillColor(...WHITE);
+        doc.roundedRect(m, y, W-m*2, crdH, 2.5, 2.5, "F");
+        doc.setDrawColor(...BDR); doc.setLineWidth(0.2);
+        doc.roundedRect(m, y, W-m*2, crdH, 2.5, 2.5, "S");
+        // Left strip
+        doc.setFillColor(...sevC);
+        doc.rect(m, y, 3, crdH, "F");
+
+        // Number badge circle — cx, cy, r
+        const nbCX = m+13, nbCY = y+9, nbR = 5;
+        doc.setFillColor(...sevC);
+        doc.circle(nbCX, nbCY, nbR, "F");
+        circleText(String(i+1), nbCX, nbCY, nbR, WHITE, i < 9 ? 8 : 6.5);
+
+        // Platform + category label
+        doc.setFont("helvetica","bold"); doc.setFontSize(8.5); doc.setTextColor(...DARK);
+        doc.text(`[${safe(f.platform??"").toUpperCase()}]  ${safe(f.category??"")}`, m+21, y+9);
+
+        // Severity pill — top-right
+        pill(sevLabel, W-m-PLW-2, y+3.5, sevC, WHITE, PLW);
+
+        // Snippet
+        if (snipLines.length > 0) {
+          doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(...MID);
+          snipLines.slice(0,3).forEach((l:string, li:number) => {
+            doc.text(l, m+21, y+15+(li*5));
+          });
+        }
+
+        y += crdH + 5;
+      });
+    }
+
+    y += 6;
+
+    // ════════════════════════════════════════════════════════════════════════
+    // HR ASSESSMENT DECISION
+    // ════════════════════════════════════════════════════════════════════════
+    if (report.assessment_status) {
+      heading("KEPUTUSAN HR ASSESSMENT");
+      guard(30);
+
+      const isApp = report.assessment_status === "appropriate";
+      const assC:[number,number,number]  = isApp ? [5,150,105]  : [220,38,38];
+      const assBg:[number,number,number] = isApp ? [209,250,229] : [254,226,226];
+      const assB:[number,number,number]  = isApp ? [52,211,153]  : [252,165,165];
+
+      doc.setFillColor(...assBg);
+      doc.roundedRect(m, y, W-m*2, 30, 3, 3, "F");
+      doc.setDrawColor(...assB); doc.setLineWidth(0.5);
+      doc.roundedRect(m, y, W-m*2, 30, 3, 3, "S");
+
+      // Decision icon circle
+      const icCX = m+17, icCY = y+15, icR = 10;
+      doc.setFillColor(...assC);
+      doc.circle(icCX, icCY, icR, "F");
+      circleText(isApp?"OK":"X", icCX, icCY, icR, WHITE, 10);
+
+      // Decision text
+      doc.setFont("helvetica","bold"); doc.setFontSize(12); doc.setTextColor(...assC);
+      doc.text(
+        isApp ? "APPROPRIATE - LANJUT PROSES" : "INAPPROPRIATE - TIDAK DILANJUTKAN",
+        m+31, y+13
+      );
+      doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(...MID);
+      doc.text(`Dinilai oleh : ${safe(report.assessed_by_name??"-")}`, m+31, y+21);
+      doc.text(`Waktu        : ${report.assessed_at ? new Date(report.assessed_at).toLocaleString("id-ID") : "-"}`, m+31, y+28);
+
+      y += 36;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // FOOTER — every page
+    // ════════════════════════════════════════════════════════════════════════
+    const totalPg = doc.getNumberOfPages();
+    for (let p = 1; p <= totalPg; p++) {
+      doc.setPage(p);
+      doc.setDrawColor(...BDR); doc.setLineWidth(0.25);
+      doc.line(m, H-13, W-m, H-13);
+      doc.setFont("helvetica","bold"); doc.setFontSize(7); doc.setTextColor(...AC);
+      doc.text("HRCheck", m, H-7);
+      doc.setFont("helvetica","normal"); doc.setTextColor(...LIGHT);
+      doc.text("  AI Recruitment Platform  |  Dokumen Rahasia & Terbatas", m+20, H-7);
+      doc.setFont("helvetica","normal"); doc.setFontSize(7); doc.setTextColor(...LIGHT);
+      doc.text(`Hal. ${p} / ${totalPg}`, W-m, H-7, {align:"right"});
+      // Watermark
+      doc.setGState(new (doc as any).GState({opacity:0.03}));
+      doc.setFont("helvetica","bold"); doc.setFontSize(44); doc.setTextColor(60,60,60);
+      doc.text("HRCHECK CONFIDENTIAL", W/2, H/2, {align:"center", angle:40});
+      doc.setGState(new (doc as any).GState({opacity:1}));
+    }
+
+    doc.save(`HRCheck_${candidate.full_name.replace(/\s+/g,"_")}_${new Date().toISOString().slice(0,10)}.pdf`);
+  };
+
 
   const load = useCallback(async () => {
     try {
@@ -230,6 +591,19 @@ export default function CandidateDetailPage() {
               <div style={{ textAlign: "right" }}>
                 <p style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Risk Overall</p>
                 <RiskBadge level={overallRisk} large />
+
+                {/* Download button */}
+                <button onClick={handleDownload} style={{
+                  marginTop: 10, display: "flex", alignItems: "center", gap: 6,
+                  padding: "7px 14px", borderRadius: 10, fontSize: 12, fontWeight: 600,
+                  background: "var(--bg3)", border: "1px solid var(--border)",
+                  color: "var(--text2)", cursor: "pointer", transition: "all 0.15s", marginLeft: "auto",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text2)"; }}
+                >
+                  <Download size={12} /> Download Report
+                </button>
               </div>
             )}
           </div>
@@ -302,6 +676,89 @@ export default function CandidateDetailPage() {
                     {t === "overview" ? "Ringkasan" : t === "details" ? "Skor Risiko" : `Konten Flagged ${flagged.length > 0 ? `(${flagged.length})` : ""}`}
                   </button>
                 ))}
+              </div>
+
+              {/* Assessment Panel (No. 1 BCA) */}
+              <div style={{
+                background: "var(--bg2)", border: "1px solid var(--border)",
+                borderRadius: 18, padding: "20px 24px", marginBottom: 16,
+                boxShadow: "var(--sh-sm)",
+              }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 14 }}>
+                  Keputusan Assessment HR
+                </p>
+
+                {report.assessment_status ? (
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{
+                        width: 42, height: 42, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center",
+                        background: report.assessment_status === "appropriate" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.12)",
+                        border: `1px solid ${report.assessment_status === "appropriate" ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.25)"}`,
+                      }}>
+                        {report.assessment_status === "appropriate"
+                          ? <ThumbsUp size={18} style={{ color: "#22c55e" }} />
+                          : <ThumbsDown size={18} style={{ color: "#ef4444" }} />}
+                      </div>
+                      <div>
+                        <p style={{
+                          fontWeight: 700, fontSize: 15,
+                          color: report.assessment_status === "appropriate" ? "#22c55e" : "#ef4444",
+                          marginBottom: 3,
+                        }}>
+                          {report.assessment_status === "appropriate" ? "✅ Appropriate" : "❌ Inappropriate"}
+                        </p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text3)" }}>
+                            <User size={11} /> {report.assessed_by_name ?? "-"} ({report.assessed_by ?? "-"})
+                          </span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--text3)" }}>
+                            <Calendar size={11} /> {report.assessed_at ? new Date(report.assessed_at).toLocaleString("id-ID") : "-"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <button onClick={() => setReport({ ...report, assessment_status: undefined as any })} style={{
+                      fontSize: 11.5, padding: "5px 12px", borderRadius: 8,
+                      background: "var(--bg3)", border: "1px solid var(--border)",
+                      color: "var(--text3)", cursor: "pointer",
+                    }}>Ubah</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button
+                      disabled={assessing}
+                      onClick={() => handleAssess("appropriate")}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "10px 20px",
+                        borderRadius: 12, border: "1px solid rgba(34,197,94,0.4)",
+                        background: "rgba(34,197,94,0.08)", color: "#22c55e",
+                        fontWeight: 700, fontSize: 13, cursor: "pointer", transition: "all 0.15s",
+                        opacity: assessing ? 0.6 : 1,
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = "rgba(34,197,94,0.18)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "rgba(34,197,94,0.08)"}
+                    >
+                      <ThumbsUp size={14} /> Appropriate
+                    </button>
+                    <button
+                      disabled={assessing}
+                      onClick={() => handleAssess("inappropriate")}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "10px 20px",
+                        borderRadius: 12, border: "1px solid rgba(239,68,68,0.4)",
+                        background: "rgba(239,68,68,0.08)", color: "#ef4444",
+                        fontWeight: 700, fontSize: 13, cursor: "pointer", transition: "all 0.15s",
+                        opacity: assessing ? 0.6 : 1,
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = "rgba(239,68,68,0.18)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "rgba(239,68,68,0.08)"}
+                    >
+                      <ThumbsDown size={14} /> Inappropriate
+                    </button>
+                    {assessing && <Loader2 size={16} className="animate-spin" style={{ color: "var(--accent)", alignSelf: "center" }} />}
+                  </div>
+                )}
               </div>
 
               {/* Overview */}
@@ -418,25 +875,37 @@ export default function CandidateDetailPage() {
                             {/* Snippet */}
                             <p style={{ fontSize: 13, color: "var(--text2)", lineHeight: 1.6, marginBottom: hasUrl ? 10 : 0 }}>{f.content_snippet}</p>
                             {/* Evidence button */}
-                            {hasUrl && (
-                              <a
-                                href={f.source_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: "inline-flex", alignItems: "center", gap: 5,
-                                  padding: "5px 12px", borderRadius: 8,
-                                  background: "var(--bg3)", border: `1px solid ${pColor}40`,
-                                  color: pColor, fontSize: 11.5, fontWeight: 600,
-                                  textDecoration: "none", transition: "all 0.15s",
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.background = pColor + "18"; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = "var(--bg3)"; }}
-                              >
-                                <ExternalLink size={11} />
-                                Lihat Bukti
-                              </a>
-                            )}
+                            {hasUrl && (() => {
+                              const isGoogleSearch = f.source_url?.includes("google.com/search");
+                              let domain = "";
+                              try { domain = new URL(f.source_url).hostname.replace("www.", ""); } catch {}
+                              const btnLabel = f.source_label
+                                ? f.source_label
+                                : isGoogleSearch
+                                  ? "Cari Bukti di Google"
+                                  : domain ? `Lihat di ${domain}` : "Lihat Bukti";
+                              return (
+                                <a
+                                  href={f.source_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: "inline-flex", alignItems: "center", gap: 5,
+                                    padding: "5px 12px", borderRadius: 8,
+                                    background: isGoogleSearch ? "rgba(66,133,244,0.1)" : "var(--bg3)",
+                                    border: isGoogleSearch ? "1px solid rgba(66,133,244,0.3)" : `1px solid ${pColor}40`,
+                                    color: isGoogleSearch ? "#4285f4" : pColor,
+                                    fontSize: 11.5, fontWeight: 600,
+                                    textDecoration: "none", transition: "all 0.15s",
+                                  }}
+                                  onMouseEnter={e => { e.currentTarget.style.opacity = "0.8"; }}
+                                  onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+                                >
+                                  <ExternalLink size={11} />
+                                  {btnLabel}
+                                </a>
+                              );
+                            })()}
                           </div>
                         );
                       })}

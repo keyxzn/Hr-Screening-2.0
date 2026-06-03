@@ -55,6 +55,11 @@ class ScreeningReport(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
     completed_at: Mapped[DateTime | None] = mapped_column(DateTime)
+    # Assessment fields (No. 1 BCA request)
+    assessment_status: Mapped[str | None] = mapped_column(String(50))   # appropriate | inappropriate
+    assessed_by: Mapped[str | None] = mapped_column(String(255))         # HR user email
+    assessed_by_name: Mapped[str | None] = mapped_column(String(255))    # HR user name
+    assessed_at: Mapped[DateTime | None] = mapped_column(DateTime)       # timestamp
 
     # Relationship
     candidate: Mapped["Candidate"] = relationship("Candidate", back_populates="reports")
@@ -70,3 +75,7 @@ class HRUser(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     role: Mapped[str] = mapped_column(String(50), default="hr")  # hr | admin
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
+
+class AssessmentStatus(str, enum.Enum):
+    appropriate = "appropriate"
+    inappropriate = "inappropriate"

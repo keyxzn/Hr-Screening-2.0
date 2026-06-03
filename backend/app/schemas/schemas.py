@@ -86,6 +86,9 @@ class FlaggedItem(BaseModel):
     url: str | None = None
 
 
+class AssessmentUpdate(BaseModel):
+    assessment_status: str  # appropriate | inappropriate
+    
 class ScreeningReportResponse(BaseModel):
     id: str
     candidate_id: str
@@ -97,6 +100,10 @@ class ScreeningReportResponse(BaseModel):
     ai_summary: str | None
     created_at: datetime
     completed_at: datetime | None
+    assessment_status: str | None = None
+    assessed_by: str | None = None
+    assessed_by_name: str | None = None
+    assessed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -106,3 +113,28 @@ class ScreeningReportResponse(BaseModel):
 class MessageResponse(BaseModel):
     message: str
     data: Any | None = None
+
+
+# ─── User Management (No. 7 BCA request) ─────────────────
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    full_name: str
+    password: str
+    role: str = "hr"
+
+class UserUpdate(BaseModel):
+    full_name: str | None = None
+    email: EmailStr | None = None
+    password: str | None = None
+    role: str | None = None
+    is_active: bool | None = None
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+    created_at: datetime
+    model_config = {"from_attributes": True}
