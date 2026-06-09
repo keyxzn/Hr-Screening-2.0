@@ -55,11 +55,13 @@ class ScreeningReport(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
     completed_at: Mapped[DateTime | None] = mapped_column(DateTime)
-    # Assessment fields (No. 1 BCA request)
+    # Assessment fields
     assessment_status: Mapped[str | None] = mapped_column(String(50))   # appropriate | inappropriate
-    assessed_by: Mapped[str | None] = mapped_column(String(255))         # HR user email
-    assessed_by_name: Mapped[str | None] = mapped_column(String(255))    # HR user name
-    assessed_at: Mapped[DateTime | None] = mapped_column(DateTime)       # timestamp
+    assessed_by: Mapped[str | None] = mapped_column(String(255))
+    assessed_by_name: Mapped[str | None] = mapped_column(String(255))
+    assessed_at: Mapped[DateTime | None] = mapped_column(DateTime)
+    # Lock field — True kalau auto-assessed (blacklist atau auto dari risk level)
+    assessment_locked: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationship
     candidate: Mapped["Candidate"] = relationship("Candidate", back_populates="reports")
@@ -76,6 +78,16 @@ class HRUser(Base):
     role: Mapped[str] = mapped_column(String(50), default="hr")  # hr | admin
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
 
+
 class AssessmentStatus(str, enum.Enum):
     appropriate = "appropriate"
     inappropriate = "inappropriate"
+
+
+class HRSettings(Base):
+    """Key-value store untuk konfigurasi HR, mis. medium_threshold."""
+    __tablename__ = "hr_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255), nullable=False)
+    updated_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -769,6 +769,12 @@ export default function CandidateDetailPage() {
                     <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 18, padding: "22px 24px", boxShadow: "var(--sh-sm)" }}>
                       <p style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10 }}>AI Summary</p>
                       <p style={{ fontSize: 14, color: "var(--text2)", lineHeight: 1.75 }}>{report.ai_summary}</p>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 14, padding: "10px 12px", borderRadius: 10, background: "var(--bg3)", border: "1px solid var(--border)" }}>
+                        <span style={{ fontSize: 13, flexShrink: 0 }}>⚠️</span>
+                        <p style={{ fontSize: 11.5, color: "var(--text4)", lineHeight: 1.6, margin: 0 }}>
+                          Ringkasan ini dihasilkan AI berdasarkan data publik yang berhasil di-scrape. Akurasi bergantung pada ketersediaan dan kelengkapan data, bukan kesimpulan final. Tetap diperlukan penilaian manual dari HR.
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -834,6 +840,12 @@ export default function CandidateDetailPage() {
                     {Object.keys(riskScores).length === 0 && (
                       <p style={{ fontSize: 13, color: "var(--text3)", textAlign: "center", padding: "20px 0" }}>Tidak ada skor risiko tersedia.</p>
                     )}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 20, padding: "10px 12px", borderRadius: 10, background: "var(--bg3)", border: "1px solid var(--border)" }}>
+                    <span style={{ fontSize: 13, flexShrink: 0 }}>⚠️</span>
+                    <p style={{ fontSize: 11.5, color: "var(--text4)", lineHeight: 1.6, margin: 0 }}>
+                      Skor dihitung AI dari data yang berhasil dikumpulkan. Platform seperti Instagram & Facebook sering membatasi akses publik, jika data minim, skor mungkin tidak representatif. Gunakan sebagai indikasi awal, bukan penilaian mutlak.
+                    </p>
                   </div>
                 </div>
               )}

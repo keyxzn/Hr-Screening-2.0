@@ -1,21 +1,42 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import AppLayout from "@/components/AppLayout";
 import RiskBadge from "@/components/RiskBadge";
-import { api, assessReport, Candidate, ScreeningReport } from "@/lib/api";
-import { Plus, Trash2, Eye, Loader2, Users, Search, UserPlus, FileSpreadsheet, Download, ChevronDown, ThumbsUp, ThumbsDown } from "lucide-react";
+import { api, uploadBlacklist, settingsApi, Candidate, ScreeningReport, HRSetting } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import {
+  Plus, Trash2, Eye, Loader2, Users, Search, UserPlus, FileSpreadsheet,
+  Download, ChevronDown, ThumbsUp, ThumbsDown, ShieldBan, Lock, Settings2,
+} from "lucide-react";
 
 type Row = Candidate & { report?: ScreeningReport };
 
 export default function CandidatesPage() {
-  const [rows, setRows]           = useState<Row[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [search, setSearch]       = useState("");
-  const [filter, setFilter]       = useState("all");
-  const [dlOpen, setDlOpen]       = useState(false);
-  const [dlLoading, setDlLoading] = useState(false);
-  const [assessing, setAssessing] = useState<string | null>(null); // reportId being assessed
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
+  const [rows, setRows]             = useState<Row[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [search, setSearch]         = useState("");
+  const [filter, setFilter]         = useState("all");
+  const [dlOpen, setDlOpen]         = useState(false);
+  const [dlLoading, setDlLoading]   = useState(false);
+
+
+  // Blacklist modal state
+  const [blOpen, setBlOpen]         = useState(false);
+  const [blFile, setBlFile]         = useState<File | null>(null);
+  const [blLoading, setBlLoading]   = useState(false);
+  const [blResult, setBlResult]     = useState<{ matched: number; not_found: string[] } | null>(null);
+  const blInputRef                  = useRef<HTMLInputElement>(null);
+
+  // Settings — hanya admin
+  const [stOpen, setStOpen]         = useState(false);
+  const [threshold, setThreshold]   = useState("50");
+  const [stSaving, setStSaving]     = useState(false);
+
+
 
   async function load() {
     try {
@@ -26,7 +47,32 @@ export default function CandidatesPage() {
       setRows(w);
     } finally { setLoading(false); }
   }
-  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    load();
+    if (isAdmin) loadSettings();
+  }, [isAdmin]);
+
+  async function loadSettings() {
+    try {
+      const s = await settingsApi.getAll();
+      const t = s.find(x => x.key === "medium_threshold");
+      if (t) setThreshold(t.value);
+    } catch {}
+  }
+
+  async function saveThreshold() {
+    setStSaving(true);
+    try {
+      await settingsApi.update("medium_threshold", threshold);
+      alert("Threshold tersimpan.");
+      setStOpen(false);
+    } catch (e: any) {
+      alert(e?.message ?? "Gagal simpan.");
+    } finally {
+      setStSaving(false);
+    }
+  }
 
   async function del(id: string) {
     if (!confirm("Hapus kandidat ini?")) return;
@@ -34,30 +80,24 @@ export default function CandidatesPage() {
     setRows(r => r.filter(x => x.id !== id));
   }
 
-  async function handleAssess(row: Row, status: "appropriate" | "inappropriate") {
-    if (!row.report) return;
-    // toggle off if same value
-    const newStatus = row.report.assessment_status === status ? undefined : status;
-    setAssessing(row.report.id);
+
+  async function handleBlacklist() {
+    if (!blFile) return;
+    setBlLoading(true);
+    setBlResult(null);
     try {
-      if (newStatus) {
-        const updated = await assessReport(row.report.id, { assessment_status: newStatus });
-        setRows(prev => prev.map(r => r.id === row.id ? { ...r, report: updated } : r));
-      } else {
-        // clear by patching with a "clear" approach — send a neutral patch if backend supports,
-        // otherwise just optimistically update local state
-        setRows(prev => prev.map(r =>
-          r.id === row.id ? { ...r, report: { ...r.report!, assessment_status: undefined } } : r
-        ));
-      }
-    } catch (e) {
-      alert("Gagal menyimpan keputusan.");
+      const result = await uploadBlacklist(blFile);
+      setBlResult(result);
+      await load(); // refresh rows
+    } catch (e: any) {
+      alert(e?.message ?? "Upload gagal.");
     } finally {
-      setAssessing(null);
+      setBlLoading(false);
     }
   }
 
-  // ── jsPDF bulk download ──────────────────────────────────────────────
+
+  // ── jsPDF bulk download ───────────────────────────────
   async function downloadBulk(riskFilter: string) {
     const targets = rows.filter(r => {
       if (!r.report || r.report.status !== "completed") return false;
@@ -130,7 +170,6 @@ export default function CandidatesPage() {
         doc.text(`RISK: ${(riskLabel[risk] ?? "").toUpperCase()}`, W - margin - 20, y + 13, { align: "center" });
         y += 36;
 
-        // Assessment status in PDF
         if (report.assessment_status) {
           const isApp = report.assessment_status === "appropriate";
           const assC: [number, number, number] = isApp ? [16, 185, 129] : [239, 68, 68];
@@ -138,7 +177,11 @@ export default function CandidatesPage() {
           doc.setDrawColor(...assC); doc.setLineWidth(0.4);
           doc.roundedRect(margin, y, W - margin * 2, 14, 2, 2, "FD");
           doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...assC);
-          doc.text(isApp ? "KEPUTUSAN HR: APPROPRIATE" : "KEPUTUSAN HR: INAPPROPRIATE", margin + 5, y + 9);
+          const lockLabel = report.assessment_locked ? " [AUTO]" : "";
+          doc.text(
+            isApp ? `KEPUTUSAN HR: APPROPRIATE${lockLabel}` : `KEPUTUSAN HR: INAPPROPRIATE${lockLabel}`,
+            margin + 5, y + 9
+          );
           if (report.assessed_by_name) {
             doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(100, 116, 139);
             doc.text(`Dinilai oleh: ${safe(report.assessed_by_name)}`, W - margin, y + 9, { align: "right" });
@@ -256,23 +299,12 @@ export default function CandidatesPage() {
 
   const fmt = (d: string) => new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 
-  // Assessment button styles
-  const assessBtn = (active: boolean, type: "appropriate" | "inappropriate") => ({
-    display: "flex" as const, alignItems: "center" as const, gap: 4,
-    padding: "5px 10px", borderRadius: 8, fontSize: 11.5, fontWeight: 600,
-    cursor: "pointer", transition: "all 0.15s", border: "1px solid",
-    ...(active && type === "appropriate"
-      ? { background: "#E1F5EE", borderColor: "#5DCAA5", color: "#0F6E56" }
-      : active && type === "inappropriate"
-      ? { background: "#FCEBEB", borderColor: "#F7C1C1", color: "#A32D2D" }
-      : { background: "var(--bg2)", borderColor: "var(--border)", color: "var(--text3)" }
-    ),
-  });
 
   return (
     <AppLayout>
       <div style={{ minHeight: "100vh" }} onClick={() => dlOpen && setDlOpen(false)}>
-        {/* Header */}
+
+        {/* ── Header ── */}
         <div style={{ background: "var(--bg2)", borderBottom: "1px solid var(--border)", padding: "24px 32px" }}>
           <div style={{ maxWidth: 1160, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
             <div>
@@ -280,6 +312,33 @@ export default function CandidatesPage() {
               <h1 style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 30, color: "var(--text)", letterSpacing: "-0.03em" }}>Semua Kandidat</h1>
             </div>
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+
+              {/* Settings button — admin only */}
+              {isAdmin && (
+                <button onClick={() => setStOpen(true)} style={{
+                  display: "flex", alignItems: "center", gap: 7, padding: "9px 14px",
+                  borderRadius: 12, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  background: "var(--bg2)", border: "1.5px solid var(--border)", color: "var(--text3)",
+                  transition: "all 0.15s",
+                }}
+                  title="Auto-Assessment Settings"
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text3)"; }}
+                >
+                  <Settings2 size={13} />
+                </button>
+              )}
+
+              {/* Blacklist button */}
+              <button onClick={() => { setBlOpen(true); setBlResult(null); setBlFile(null); }} style={{
+                display: "flex", alignItems: "center", gap: 7, padding: "9px 16px",
+                borderRadius: 12, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                background: "var(--danger-d)", border: "1.5px solid var(--danger)", color: "var(--danger)",
+                transition: "all 0.15s",
+              }}>
+                <ShieldBan size={13} /> Blacklist
+              </button>
+
               {/* Download dropdown */}
               <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
                 <button onClick={() => setDlOpen(o => !o)} disabled={dlLoading} style={{
@@ -324,6 +383,7 @@ export default function CandidatesPage() {
                   </div>
                 )}
               </div>
+
               <Link href="/candidates/bulk" className="btn btn-ghost"><FileSpreadsheet size={13} /> Bulk Upload</Link>
               <Link href="/candidates/add" className="btn btn-primary"><UserPlus size={13} /> Add Kandidat</Link>
             </div>
@@ -405,7 +465,7 @@ export default function CandidatesPage() {
                     {filtered.map(row => {
                       const assessed = row.report?.assessment_status;
                       const isCompleted = row.report?.status === "completed";
-                      const isAssessing = assessing === row.report?.id;
+                      const locked = !!row.report?.assessment_locked;
                       return (
                         <tr key={row.id} style={{ borderBottom: "1px solid var(--border)", transition: "background 0.12s" }}
                           onMouseEnter={e => (e.currentTarget.style.background = "var(--bg3)")}
@@ -436,44 +496,51 @@ export default function CandidatesPage() {
                           <td style={{ padding: "14px 18px" }}>
                             {row.report?.overall_risk ? <RiskBadge level={row.report.overall_risk} /> : <span style={{ color: "var(--border2)" }}>—</span>}
                           </td>
-                          {/* Keputusan HR column */}
+
+                          {/* Keputusan HR */}
                           <td style={{ padding: "14px 18px" }}>
-                            {!isCompleted ? (
-                              <span style={{ fontSize: 12, color: "var(--text4)" }}>—</span>
-                            ) : isAssessing ? (
-                              <Loader2 size={14} className="animate-spin" style={{ color: "var(--text3)" }} />
-                            ) : !assessed ? (
-                              <span style={{ fontSize: 12, color: "var(--text4)", fontStyle: "italic" }}>Belum dinilai</span>
-                            ) : assessed === "appropriate" ? (
-                              <span style={{
-                                display: "inline-flex", alignItems: "center", gap: 5,
-                                fontSize: 12, fontWeight: 700, padding: "4px 12px",
-                                borderRadius: 999, background: "#E1F5EE", color: "#0F6E56",
-                              }}>
-                                <ThumbsUp size={11} /> Appropriate
-                              </span>
+                            {!isCompleted || !assessed ? (
+                              <span style={{ fontSize: 13, color: "var(--text4)" }}>—</span>
                             ) : (
-                              <span style={{
-                                display: "inline-flex", alignItems: "center", gap: 5,
-                                fontSize: 12, fontWeight: 700, padding: "4px 12px",
-                                borderRadius: 999, background: "#FCEBEB", color: "#A32D2D",
-                              }}>
-                                <ThumbsDown size={11} /> Inappropriate
-                              </span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <span style={{
+                                  display: "inline-flex", alignItems: "center", gap: 5,
+                                  fontSize: 12, fontWeight: 700, padding: "4px 12px",
+                                  borderRadius: 999,
+                                  background: assessed === "appropriate" ? "#E1F5EE" : "#FCEBEB",
+                                  color: assessed === "appropriate" ? "#0F6E56" : "#A32D2D",
+                                }}>
+                                  {assessed === "appropriate" ? <ThumbsUp size={11} /> : <ThumbsDown size={11} />}
+                                  {assessed === "appropriate" ? "Appropriate" : "Inappropriate"}
+                                </span>
+                                {locked && (
+                                  <span title="Auto-assessed" style={{
+                                    display: "inline-flex", alignItems: "center", gap: 4,
+                                    fontSize: 10, fontWeight: 600, padding: "3px 8px",
+                                    borderRadius: 999, background: "var(--bg3)",
+                                    color: "var(--text4)", border: "1px solid var(--border)",
+                                  }}>
+                                    <Lock size={9} /> Auto
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </td>
-                          {/* Dinilai Oleh column */}
+
+                          {/* Dinilai Oleh */}
                           <td style={{ padding: "14px 18px" }}>
                             {row.report?.assessed_by_name ? (
                               <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                                 <div style={{
                                   width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
                                   display: "flex", alignItems: "center", justifyContent: "center",
-                                  background: "var(--bg3)", border: "1.5px solid var(--border)",
-                                  fontSize: 10, fontWeight: 800, color: "var(--text2)",
+                                  background: locked ? "var(--danger-d)" : "var(--bg3)",
+                                  border: `1.5px solid ${locked ? "var(--danger)" : "var(--border)"}`,
+                                  fontSize: 10, fontWeight: 800,
+                                  color: locked ? "var(--danger)" : "var(--text2)",
                                   fontFamily: "'Syne',sans-serif",
                                 }}>
-                                  {row.report.assessed_by_name.charAt(0).toUpperCase()}
+                                  {locked ? "⚙" : row.report.assessed_by_name.charAt(0).toUpperCase()}
                                 </div>
                                 <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text2)" }}>
                                   {row.report.assessed_by_name}
@@ -483,6 +550,7 @@ export default function CandidatesPage() {
                               <span style={{ fontSize: 12, color: "var(--text4)" }}>—</span>
                             )}
                           </td>
+
                           <td style={{ padding: "14px 18px", fontSize: 12, color: "var(--text3)", whiteSpace: "nowrap" }}>{fmt(row.created_at)}</td>
                           <td style={{ padding: "14px 18px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -508,6 +576,174 @@ export default function CandidatesPage() {
           )}
         </div>
       </div>
+
+      {/* ── Blacklist Modal ── */}
+      {blOpen && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => !blLoading && setBlOpen(false)}>
+          <div style={{
+            background: "var(--bg2)", borderRadius: 20, padding: "32px",
+            border: "1.5px solid var(--border)", width: 440, maxWidth: "90vw",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.4)",
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--danger-d)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ShieldBan size={18} style={{ color: "var(--danger)" }} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: "var(--text)", fontFamily: "'Syne',sans-serif", margin: 0 }}>Upload Blacklist</h2>
+                <p style={{ fontSize: 12, color: "var(--text3)", margin: 0 }}>Kandidat yang match by email akan di-lock sebagai Inappropriate</p>
+              </div>
+            </div>
+
+            <div style={{ height: 1, background: "var(--border)", margin: "20px 0" }} />
+
+            {!blResult ? (
+              <>
+                <p style={{ fontSize: 12.5, color: "var(--text3)", marginBottom: 14, lineHeight: 1.6 }}>
+                  Upload CSV dengan kolom <code style={{ background: "var(--bg3)", padding: "1px 6px", borderRadius: 4, fontSize: 11 }}>email</code> (format sama dengan template bulk upload).
+                  Kandidat yang email-nya cocok akan otomatis di-set <strong style={{ color: "var(--danger)" }}>Inappropriate</strong> dan dikunci.
+                </p>
+                <div
+                  onClick={() => blInputRef.current?.click()}
+                  style={{
+                    border: `2px dashed ${blFile ? "var(--danger)" : "var(--border)"}`,
+                    borderRadius: 12, padding: "24px", textAlign: "center",
+                    cursor: "pointer", transition: "all 0.15s", marginBottom: 16,
+                    background: blFile ? "var(--danger-d)" : "var(--bg3)",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = "var(--danger)"}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = blFile ? "var(--danger)" : "var(--border)"}
+                >
+                  <input ref={blInputRef} type="file" accept=".csv" style={{ display: "none" }}
+                    onChange={e => setBlFile(e.target.files?.[0] ?? null)} />
+                  {blFile ? (
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "var(--danger)", margin: 0 }}>📄 {blFile.name}</p>
+                  ) : (
+                    <p style={{ fontSize: 13, color: "var(--text4)", margin: 0 }}>Klik untuk pilih CSV blacklist</p>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setBlOpen(false)} disabled={blLoading} style={{
+                    flex: 1, padding: "10px", borderRadius: 10, border: "1.5px solid var(--border)",
+                    background: "var(--bg3)", color: "var(--text2)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  }}>Batal</button>
+                  <button onClick={handleBlacklist} disabled={!blFile || blLoading} style={{
+                    flex: 2, padding: "10px", borderRadius: 10, border: "none",
+                    background: blFile && !blLoading ? "var(--danger)" : "var(--bg3)",
+                    color: blFile && !blLoading ? "white" : "var(--text4)",
+                    fontSize: 13, fontWeight: 700, cursor: blFile && !blLoading ? "pointer" : "not-allowed",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  }}>
+                    {blLoading ? <><Loader2 size={13} className="animate-spin" /> Memproses…</> : <><ShieldBan size={13} /> Proses Blacklist</>}
+                  </button>
+                </div>
+              </>
+            ) : (
+              // Result view
+              <>
+                <div style={{ textAlign: "center", padding: "8px 0 20px" }}>
+                  <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+                  <p style={{ fontSize: 16, fontWeight: 800, color: "var(--text)", fontFamily: "'Syne',sans-serif" }}>Blacklist Diproses</p>
+                  <p style={{ fontSize: 13, color: "var(--text3)", marginTop: 4 }}>
+                    <strong style={{ color: "var(--danger)" }}>{blResult.matched}</strong> kandidat berhasil di-blacklist
+                    {blResult.not_found.length > 0 && `, ${blResult.not_found.length} email tidak ditemukan`}
+                  </p>
+                </div>
+                {blResult.not_found.length > 0 && (
+                  <div style={{ background: "var(--bg3)", borderRadius: 10, padding: "12px 14px", marginBottom: 16, maxHeight: 120, overflowY: "auto" }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text3)", marginBottom: 6, letterSpacing: "0.08em", textTransform: "uppercase" }}>Email tidak ditemukan:</p>
+                    {blResult.not_found.map(e => (
+                      <p key={e} style={{ fontSize: 12, color: "var(--text4)", fontFamily: "'JetBrains Mono',monospace", margin: "2px 0" }}>{e}</p>
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => setBlOpen(false)} style={{
+                  width: "100%", padding: "10px", borderRadius: 10, border: "none",
+                  background: "var(--accent)", color: "var(--bg)", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                }}>Tutup</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Settings Modal ── */}
+
+
+      {/* ── Settings Modal — admin only ── */}
+      {isAdmin && stOpen && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 1000,
+          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => !stSaving && setStOpen(false)}>
+          <div style={{
+            background: "var(--bg2)", borderRadius: 20, padding: "32px",
+            border: "1.5px solid var(--border)", width: 400, maxWidth: "90vw",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.4)",
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--bg3)", display: "flex", alignItems: "center", justifyContent: "center", border: "1.5px solid var(--border)" }}>
+                <Settings2 size={18} style={{ color: "var(--accent)" }} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: "var(--text)", fontFamily: "'Syne',sans-serif", margin: 0 }}>Auto-Assessment Settings</h2>
+                <p style={{ fontSize: 12, color: "var(--text3)", margin: 0 }}>Konfigurasi threshold untuk risiko medium</p>
+              </div>
+            </div>
+
+            <div style={{ background: "var(--bg3)", borderRadius: 12, padding: "16px", marginBottom: 20, border: "1px solid var(--border)" }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)", marginBottom: 4 }}>Aturan Auto-Assessment</p>
+              <ul style={{ fontSize: 12, color: "var(--text3)", lineHeight: 1.8, paddingLeft: 16, margin: 0 }}>
+                <li><strong style={{ color: "#dc2626" }}>Critical / High</strong> → Auto <em>Inappropriate</em>, locked</li>
+                <li><strong style={{ color: "var(--success)" }}>Low</strong> → Auto <em>Appropriate</em>, locked</li>
+                <li><strong style={{ color: "var(--warning)" }}>Medium</strong> → cek threshold di bawah</li>
+              </ul>
+            </div>
+
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text2)", marginBottom: 8 }}>
+              Medium Risk Threshold (0–100)
+            </label>
+            <p style={{ fontSize: 11.5, color: "var(--text3)", marginBottom: 10, lineHeight: 1.5 }}>
+              Kalau <em>overall score</em> &gt; threshold ini → <strong style={{ color: "var(--danger)" }}>Inappropriate</strong>, locked.
+              Kalau ≤ → tetap manual (HR decide).
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+              <input
+                type="range" min={0} max={100} value={threshold}
+                onChange={e => setThreshold(e.target.value)}
+                style={{ flex: 1, accentColor: "var(--accent)" }}
+              />
+              <div style={{
+                width: 52, height: 36, borderRadius: 8, border: "1.5px solid var(--border)",
+                background: "var(--bg3)", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 15, fontWeight: 800, color: "var(--accent)", fontFamily: "'JetBrains Mono',monospace",
+              }}>
+                {threshold}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setStOpen(false)} disabled={stSaving} style={{
+                flex: 1, padding: "10px", borderRadius: 10, border: "1.5px solid var(--border)",
+                background: "var(--bg3)", color: "var(--text2)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}>Batal</button>
+              <button onClick={saveThreshold} disabled={stSaving} style={{
+                flex: 2, padding: "10px", borderRadius: 10, border: "none",
+                background: "var(--accent)", color: "var(--bg)", fontSize: 13, fontWeight: 700,
+                cursor: stSaving ? "wait" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}>
+                {stSaving ? <><Loader2 size={13} className="animate-spin" /> Menyimpan…</> : "Simpan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

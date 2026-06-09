@@ -18,7 +18,6 @@ async def list_all_reports(db: AsyncSession = Depends(get_db)):
 
 @router.get("/{candidate_id}", response_model=ScreeningReportResponse)
 async def get_report_by_candidate(candidate_id: str, db: AsyncSession = Depends(get_db)):
-    """Always query by candidate_id — never by report primary key."""
     result = await db.execute(
         select(ScreeningReport)
         .where(ScreeningReport.candidate_id == candidate_id)
@@ -37,10 +36,18 @@ async def assess_report(
     db: AsyncSession = Depends(get_db),
     current_user: HRUser = Depends(get_current_user),
 ):
-    """Set Appropriate / Inappropriate assessment by HR."""
+    """Set Appropriate / Inappropriate assessment by HR. Blocked kalau assessment_locked=True."""
     report = await db.get(ScreeningReport, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+
+    # ← LOCK CHECK
+    if report.assessment_locked:
+        raise HTTPException(
+            status_code=403,
+            detail="Assessment ini sudah dikunci (auto-assessed). Tidak bisa diubah manual."
+        )
+
     report.assessment_status = data.assessment_status
     report.assessed_by       = current_user.email
     report.assessed_by_name  = current_user.full_name

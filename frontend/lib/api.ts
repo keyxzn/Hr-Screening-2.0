@@ -6,7 +6,6 @@ function getToken(): string {
     const u = localStorage.getItem("hr_user");
     if (!u) return "";
     const parsed = JSON.parse(u);
-    // Support both {token: "..."} and {access_token: "..."}
     return parsed.token ?? parsed.access_token ?? "";
   } catch { return ""; }
 }
@@ -19,6 +18,25 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     ...opts,
+  });
+  if (res.status === 401) {
+    localStorage.removeItem("hr_user");
+    window.location.href = "/login";
+    throw new Error("Sesi berakhir, silakan login ulang.");
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail ?? "Request failed");
+  }
+  return res.json();
+}
+
+async function reqForm<T>(path: string, formData: FormData): Promise<T> {
+  const token = getToken();
+  const res = await fetch(`${BASE}/api/v1${path}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
   });
   if (res.status === 401) {
     localStorage.removeItem("hr_user");
@@ -55,11 +73,12 @@ export interface ScreeningReport {
   }>;
   ai_summary?: string; error_message?: string;
   created_at: string; completed_at?: string;
-  // Assessment fields (No. 1 BCA)
+  // Assessment fields
   assessment_status?: "appropriate" | "inappropriate";
   assessed_by?: string;
   assessed_by_name?: string;
   assessed_at?: string;
+  assessment_locked?: boolean;  // ← NEW
 }
 
 export const api = {
@@ -71,7 +90,7 @@ export const api = {
   getReport:      (candidateId: string) => req<ScreeningReport>(`/reports/${candidateId}`),
 };
 
-// ── Assessment (No. 1) ────────────────────────────────────
+// ── Assessment ────────────────────────────────────────────
 export interface AssessmentUpdate {
   assessment_status: "appropriate" | "inappropriate";
 }
@@ -81,7 +100,7 @@ export const assessReport = (reportId: string, data: AssessmentUpdate) =>
     body: JSON.stringify(data),
   });
 
-// ── User Management (No. 7) ───────────────────────────────
+// ── User Management ───────────────────────────────────────
 export interface HRUser {
   id: string; email: string; full_name: string;
   role: string; is_active: boolean; created_at: string;
@@ -94,8 +113,33 @@ export interface UserUpdate {
   role?: string; is_active?: boolean;
 }
 export const userApi = {
-  list:   ()                        => req<HRUser[]>("/users/"),
-  create: (d: UserCreate)           => req<HRUser>("/users/", { method: "POST", body: JSON.stringify(d) }),
+  list:   ()                          => req<HRUser[]>("/users/"),
+  create: (d: UserCreate)             => req<HRUser>("/users/", { method: "POST", body: JSON.stringify(d) }),
   update: (id: string, d: UserUpdate) => req<HRUser>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(d) }),
-  delete: (id: string)              => req<{ message: string }>(`/users/${id}`, { method: "DELETE" }),
+  delete: (id: string)                => req<{ message: string }>(`/users/${id}`, { method: "DELETE" }),
+};
+
+// ── Blacklist ─────────────────────────────────────────────
+export interface BlacklistResult {
+  matched: number;
+  not_found: string[];
+}
+export const uploadBlacklist = (file: File): Promise<BlacklistResult> => {
+  const fd = new FormData();
+  fd.append("file", file);
+  return reqForm<BlacklistResult>("/candidates/blacklist/upload", fd);
+};
+
+// ── HR Settings ───────────────────────────────────────────
+export interface HRSetting {
+  key: string;
+  value: string;
+}
+export const settingsApi = {
+  getAll: () => req<HRSetting[]>("/candidates/settings/all"),
+  update: (key: string, value: string) =>
+    req<HRSetting>(`/candidates/settings/${key}`, {
+      method: "PATCH",
+      body: JSON.stringify({ value }),
+    }),
 };

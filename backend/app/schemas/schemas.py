@@ -33,7 +33,6 @@ class CandidateCreate(BaseModel):
     @field_validator("instagram_url", "twitter_url", "facebook_url", "linkedin_url", mode="before")
     @classmethod
     def empty_str_to_none(cls, v):
-        """Convert empty string or placeholder to None."""
         if v is None:
             return None
         s = str(v).strip().lower()
@@ -70,7 +69,7 @@ class CandidateResponse(BaseModel):
 # ─── Report ──────────────────────────────────────────────
 
 class RiskScores(BaseModel):
-    explicit_content: float = 0.0      # 0-100
+    explicit_content: float = 0.0
     toxic_language: float = 0.0
     hate_speech: float = 0.0
     violence: float = 0.0
@@ -82,13 +81,14 @@ class FlaggedItem(BaseModel):
     platform: str
     content_snippet: str
     category: str
-    severity: str  # low / medium / high
+    severity: str
     url: str | None = None
 
 
 class AssessmentUpdate(BaseModel):
     assessment_status: str  # appropriate | inappropriate
-    
+
+
 class ScreeningReportResponse(BaseModel):
     id: str
     candidate_id: str
@@ -104,6 +104,7 @@ class ScreeningReportResponse(BaseModel):
     assessed_by: str | None = None
     assessed_by_name: str | None = None
     assessed_at: datetime | None = None
+    assessment_locked: bool = False   # ← NEW
 
     model_config = {"from_attributes": True}
 
@@ -115,7 +116,7 @@ class MessageResponse(BaseModel):
     data: Any | None = None
 
 
-# ─── User Management (No. 7 BCA request) ─────────────────
+# ─── User Management ─────────────────────────────────────
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -138,3 +139,21 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
     model_config = {"from_attributes": True}
+
+
+# ─── HR Settings ─────────────────────────────────────────
+
+class HRSettingUpdate(BaseModel):
+    value: str
+
+class HRSettingResponse(BaseModel):
+    key: str
+    value: str
+    model_config = {"from_attributes": True}
+
+
+# ─── Blacklist ───────────────────────────────────────────
+
+class BlacklistResult(BaseModel):
+    matched: int        # kandidat yang ketemu by email
+    not_found: list[str]  # email yang tidak ada di DB

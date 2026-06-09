@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import AsyncSessionLocal
-from app.models.models import ScreeningReport, Candidate, ScreeningStatus, RiskLevel
+from app.models.models import ScreeningReport, Candidate, ScreeningStatus, RiskLevel, HRSettings
 from app.services.scrapers import (
     scrape_google,
     scrape_twitter,
@@ -18,6 +18,18 @@ from app.services.ai_analyzer import analyze_with_claude
 import structlog
 
 logger = structlog.get_logger()
+
+DEFAULT_MEDIUM_THRESHOLD = 50
+
+
+async def _get_medium_threshold(db: AsyncSession) -> int:
+    setting = await db.get(HRSettings, "medium_threshold")
+    if setting:
+        try:
+            return int(setting.value)
+        except ValueError:
+            pass
+    return DEFAULT_MEDIUM_THRESHOLD
 
 
 async def start_screening_job(candidate_id: str, report_id: str):
@@ -52,7 +64,7 @@ async def _run_screening(db: AsyncSession, candidate_id: str, report_id: str):
         scrape_linkedin(candidate.linkedin_url),
         scrape_news(candidate.full_name),
         scrape_instagram(candidate.instagram_url),
-        scrape_facebook(candidate.facebook_url),  # ← NEW
+        scrape_facebook(candidate.facebook_url),
     ]
     results = await asyncio.gather(*scrape_tasks, return_exceptions=True)
 
@@ -61,7 +73,7 @@ async def _run_screening(db: AsyncSession, candidate_id: str, report_id: str):
     linkedin_data  = results[2] if not isinstance(results[2], Exception) else {}
     news_data      = results[3] if not isinstance(results[3], Exception) else {}
     instagram_data = results[4] if not isinstance(results[4], Exception) else {}
-    facebook_data  = results[5] if not isinstance(results[5], Exception) else {}  # ← NEW
+    facebook_data  = results[5] if not isinstance(results[5], Exception) else {}
 
     raw_data = {
         "google":    google_data,
@@ -69,22 +81,56 @@ async def _run_screening(db: AsyncSession, candidate_id: str, report_id: str):
         "linkedin":  linkedin_data,
         "news":      news_data,
         "instagram": instagram_data,
-        "facebook":  facebook_data,  # ← NEW
+        "facebook":  facebook_data,
     }
 
-    # ── Step 2: AI analysis (delay untuk avoid Groq rate limit) ──
-    await asyncio.sleep(5)  # 5 detik delay antar kandidat untuk avoid Groq rate limit
+    # ── Step 2: AI analysis ────────────────────────────────
+    await asyncio.sleep(5)
     analysis = await analyze_with_claude(candidate.full_name, raw_data)
 
-    # ── Step 3: Save ──────────────────────────────────────
+    # ── Step 3: Compute risk ───────────────────────────────
+    overall_risk = _compute_overall_risk(analysis["risk_scores"])
+
     report.status          = ScreeningStatus.completed
-    report.overall_risk    = _compute_overall_risk(analysis["risk_scores"])
+    report.overall_risk    = overall_risk
     report.risk_scores     = analysis["risk_scores"]
     report.found_profiles  = _extract_profiles(raw_data, candidate)
     report.flagged_content = analysis["flagged_content"]
     report.ai_summary      = analysis["summary"]
     report.raw_data        = raw_data
     report.completed_at    = datetime.utcnow()
+
+    # ── Step 4: Auto-assessment berdasarkan overall_risk ───
+    threshold = await _get_medium_threshold(db)
+    overall_score = max(analysis["risk_scores"].values(), default=0) if analysis["risk_scores"] else 0
+
+    if overall_risk in (RiskLevel.critical, RiskLevel.high):
+        report.assessment_status = "inappropriate"
+        report.assessed_by       = "system"
+        report.assessed_by_name  = "Auto-assessed"
+        report.assessed_at       = datetime.utcnow()
+        report.assessment_locked = True
+        logger.info("auto_assessed_inappropriate", report_id=report_id, risk=overall_risk)
+
+    elif overall_risk == RiskLevel.low:
+        report.assessment_status = "appropriate"
+        report.assessed_by       = "system"
+        report.assessed_by_name  = "Auto-assessed"
+        report.assessed_at       = datetime.utcnow()
+        report.assessment_locked = True
+        logger.info("auto_assessed_appropriate", report_id=report_id, risk=overall_risk)
+
+    elif overall_risk == RiskLevel.medium:
+        if overall_score > threshold:
+            report.assessment_status = "inappropriate"
+            report.assessed_by       = "system"
+            report.assessed_by_name  = "Auto-assessed"
+            report.assessed_at       = datetime.utcnow()
+            report.assessment_locked = True
+            logger.info("auto_assessed_medium_inappropriate", report_id=report_id, score=overall_score, threshold=threshold)
+        else:
+            # Tetap manual — HR yang harus decide
+            logger.info("medium_risk_manual", report_id=report_id, score=overall_score, threshold=threshold)
 
     await db.commit()
     logger.info("screening_completed", report_id=report_id, risk=report.overall_risk)
@@ -101,13 +147,8 @@ def _compute_overall_risk(scores: dict) -> RiskLevel:
 
 
 def _extract_profiles(raw_data: dict, candidate=None) -> dict:
-    """
-    Build found_profiles dari hasil scraping + fallback ke URL kandidat jika scraping
-    gagal tapi URL sudah diisi di form.
-    """
     profiles = {}
 
-    # Instagram
     if ig := raw_data.get("instagram", {}):
         if ig.get("profile_url") and ig.get("username"):
             profiles["instagram"] = ig["profile_url"]
@@ -116,7 +157,6 @@ def _extract_profiles(raw_data: dict, candidate=None) -> dict:
         handle = u.replace("@","").split("/")[-1]
         profiles["instagram"] = f"https://www.instagram.com/{handle}/"
 
-    # Facebook — NEW
     if fb := raw_data.get("facebook", {}):
         if fb.get("profile_url") and fb.get("username"):
             profiles["facebook"] = fb["profile_url"]
@@ -128,7 +168,6 @@ def _extract_profiles(raw_data: dict, candidate=None) -> dict:
             handle = u.replace("@","").split("/")[-1]
             profiles["facebook"] = f"https://www.facebook.com/{handle}"
 
-    # Twitter
     if tw := raw_data.get("twitter", {}):
         if tw.get("username"):
             profiles["twitter"] = f"https://x.com/{tw['username']}"
@@ -137,7 +176,6 @@ def _extract_profiles(raw_data: dict, candidate=None) -> dict:
         handle = u.replace("@","").split("/")[-1]
         profiles["twitter"] = f"https://x.com/{handle}"
 
-    # LinkedIn
     if li := raw_data.get("linkedin", {}):
         if li.get("profile_url"):
             profiles["linkedin"] = li["profile_url"]
